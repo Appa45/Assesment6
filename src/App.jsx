@@ -181,14 +181,34 @@ export default function App() {
               Small steps every day lead to big results. Keep moving forward!
             </p>
           </div>
-          <button
-            type="button"
-            className="primary-btn add-button"
-            aria-label="Add data"
-            onClick={openAdd}
+          <div
+            className="add-action-group"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: '8px'
+            }}
           >
-            + Add data
-          </button>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '16px',
+                fontWeight: 600,
+                color: 'inherit'
+              }}
+            >
+              Update Today's Data
+            </h2>
+            <button
+              type="button"
+              className="primary-btn add-button"
+              aria-label="Add data"
+              onClick={openAdd}
+            >
+              + Add data
+            </button>
+          </div>
         </section>
 
         <section className="stats-grid" aria-label="Health summary">
