@@ -51,7 +51,7 @@ function StatCard({ icon, label, value, tone, note }) {
 
 export default function App() {
   const [entries, setEntries] = useState(readEntries);
-  const [modalOpen, setModalOpen] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
     date: today(),
