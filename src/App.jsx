@@ -78,7 +78,6 @@ function createMessage(role, content, extra = {}) {
 // Product helpers
 // --------------------------------------------------
 
-
 function getProduct(query) {
   const products = responseData.products || [];
   const normalized = query.toLowerCase().trim();
@@ -89,7 +88,6 @@ function getProduct(query) {
     )
   );
 }
-
 
 function parseBudget(text) {
   const numbers = text.match(/[\d,]+(?:\.\d+)?/g);
@@ -143,7 +141,6 @@ function ProductCard({ product }) {
 
       <div className="product-card-info">
         <h4>{product.name}</h4>
-
         <p>{product.description}</p>
 
         <strong>
@@ -697,11 +694,64 @@ function ChatPage({
 
   const bottomRef = useRef(null);
 
+  // One stable ID for this chat session.
+  const autoSaveId = useRef(createId());
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: 'smooth',
     });
   }, [messages]);
+
+  // ------------------------------------------------
+  // Automatically persist conversation messages
+  // ------------------------------------------------
+
+  useEffect(() => {
+    const userMessages = messages.filter(
+      (message) => message.role === 'user'
+    );
+
+    if (userMessages.length === 0) {
+      return;
+    }
+
+    const conversation = {
+      id: autoSaveId.current,
+      title: userMessages[0].content,
+      messages,
+      rating: null,
+      comment: '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const stored = readStorage(CHAT_KEY, []);
+
+    const existingIndex = stored.findIndex(
+      (item) => item.id === autoSaveId.current
+    );
+
+    let updated;
+
+    if (existingIndex >= 0) {
+      updated = [...stored];
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        ...conversation,
+        rating: updated[existingIndex].rating ?? null,
+        comment: updated[existingIndex].comment ?? '',
+      };
+    } else {
+      updated = [conversation, ...stored];
+    }
+
+    localStorage.setItem(
+      CHAT_KEY,
+      JSON.stringify(updated)
+    );
+
+    setConversations(updated);
+  }, [messages, setConversations]);
 
   function appendMessage(message) {
     setMessages((previous) => [
@@ -732,12 +782,11 @@ function ChatPage({
 
     if (!query) return;
 
-  appendMessage(
-  createMessage(
-    'assistant',
-    BUDGET_PROMPT
-  )
-);
+    // IMPORTANT: Save the user's actual message.
+    // This was missing in the previous version.
+    appendMessage(
+      createMessage('user', query)
+    );
 
     setInput('');
     setSaved(false);
@@ -818,65 +867,77 @@ function ChatPage({
   // Save conversation
   // -----------------------------------------------
 
+  function saveConversation(
+    currentMessages = messages,
+    rating = null,
+    comment = ''
+  ) {
+    const userMessages = currentMessages.filter(
+      (message) => message.role === 'user'
+    );
 
-function saveConversation(
-  currentMessages = messages,
-  rating = null,
-  comment = ''
-) {
-  const userMessages = currentMessages.filter(
-    (message) => message.role === 'user'
-  );
+    if (userMessages.length === 0) {
+      return null;
+    }
 
-  if (userMessages.length === 0) {
-    return null;
-  }
+    const conversation = {
+      id: autoSaveId.current,
+      title: userMessages[0].content,
+      messages: currentMessages,
+      rating,
+      comment,
+      updatedAt: new Date().toISOString(),
+    };
 
-  const conversation = {
-    id: createId(),
-    title: userMessages[0]?.content || 'Product recommendation',
-    messages: currentMessages,
-    rating,
-    comment,
-    updatedAt: new Date().toISOString(),
-  };
+    // Read current data from localStorage.
+    const existing = readStorage(CHAT_KEY, []);
 
-  // Update React state
-  setConversations((previous) => {
-    const updated = [conversation, ...previous];
+    const existingIndex = existing.findIndex(
+      (item) => item.id === conversation.id
+    );
 
-    // Save immediately to localStorage
+    let updated;
+
+    if (existingIndex >= 0) {
+      updated = [...existing];
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        ...conversation,
+      };
+    } else {
+      updated = [conversation, ...existing];
+    }
+
+    // Persist synchronously before updating React state.
     localStorage.setItem(
       CHAT_KEY,
       JSON.stringify(updated)
     );
 
-    return updated;
-  });
+    setConversations(updated);
 
-  return conversation;
-}
-
-
-
-function handleSave(event) {
-  event?.preventDefault();
-
-  if (saved) return;
-
-  const conversation = saveConversation(messages);
-
-  if (conversation) {
-    setSaved(true);
+    return conversation;
   }
-}
 
+  function handleSave(event) {
+    event?.preventDefault();
+
+    if (saved) return;
+
+    const conversation = saveConversation(messages);
+
+    if (conversation) {
+      setSaved(true);
+    }
+  }
 
   // -----------------------------------------------
   // Reset / new suggestion
   // -----------------------------------------------
 
   function resetConversation() {
+    autoSaveId.current = createId();
+
     setMessages(createInitialMessages());
     setInput('');
     setIsBudgetPending(false);
@@ -889,7 +950,7 @@ function handleSave(event) {
     event?.preventDefault();
 
     if (!saved) {
-      const conversation = saveConversation();
+      const conversation = saveConversation(messages);
 
       if (conversation) {
         setSaved(true);
@@ -1109,7 +1170,6 @@ function handleSave(event) {
               aria-label="Chat message"
             />
 
-            {/* The ONLY submit button on the chat page */}
             <button
               type="submit"
               className="ask-button"
@@ -1129,20 +1189,15 @@ function handleSave(event) {
               Rate this conversation
             </button>
 
-            {/* Cypress expects an anchor with href="/" */}
             <Link
               to="/"
               className="new-suggestion-link"
-              onClick={(event) => {
-                event.preventDefault();
-                handleNewSuggestion();
-              }}
+              onClick={handleNewSuggestion}
             >
               <Plus size={16} />
               Want new suggestion?
             </Link>
 
-            {/* Save must be the LAST button[type="button"] */}
             <button
               type="button"
               onClick={handleSave}
@@ -1219,11 +1274,16 @@ export default function App() {
   }, [theme]);
 
   function deleteConversation(id) {
-    setConversations((previous) =>
-      previous.filter(
-        (conversation) => conversation.id !== id
-      )
+    const updated = conversations.filter(
+      (conversation) => conversation.id !== id
     );
+
+    localStorage.setItem(
+      CHAT_KEY,
+      JSON.stringify(updated)
+    );
+
+    setConversations(updated);
   }
 
   return (
