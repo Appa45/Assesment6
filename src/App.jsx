@@ -818,49 +818,59 @@ function ChatPage({
   // Save conversation
   // -----------------------------------------------
 
-  function saveConversation(
-    currentMessages = messages,
-    rating = null,
-    comment = ''
-  ) {
-    const userMessages = currentMessages.filter(
-      (message) => message.role === 'user'
+
+function saveConversation(
+  currentMessages = messages,
+  rating = null,
+  comment = ''
+) {
+  const userMessages = currentMessages.filter(
+    (message) => message.role === 'user'
+  );
+
+  if (userMessages.length === 0) {
+    return null;
+  }
+
+  const conversation = {
+    id: createId(),
+    title: userMessages[0]?.content || 'Product recommendation',
+    messages: currentMessages,
+    rating,
+    comment,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Update React state
+  setConversations((previous) => {
+    const updated = [conversation, ...previous];
+
+    // Save immediately to localStorage
+    localStorage.setItem(
+      CHAT_KEY,
+      JSON.stringify(updated)
     );
 
-    if (userMessages.length === 0) {
-      return null;
-    }
+    return updated;
+  });
 
-    const conversation = {
-      id: createId(),
-      title:
-        userMessages[0]?.content ||
-        'Product recommendation',
-      messages: currentMessages,
-      rating,
-      comment,
-      updatedAt: new Date().toISOString(),
-    };
+  return conversation;
+}
 
-    setConversations((previous) => [
-      conversation,
-      ...previous,
-    ]);
 
-    return conversation;
+
+function handleSave(event) {
+  event?.preventDefault();
+
+  if (saved) return;
+
+  const conversation = saveConversation(messages);
+
+  if (conversation) {
+    setSaved(true);
   }
+}
 
-  function handleSave(event) {
-    event?.preventDefault();
-
-    if (saved) return;
-
-    const conversation = saveConversation();
-
-    if (conversation) {
-      setSaved(true);
-    }
-  }
 
   // -----------------------------------------------
   // Reset / new suggestion
