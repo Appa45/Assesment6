@@ -1155,3 +1155,53 @@ a {
     font-size: 9px;
   }
 }
+
+
+.chat-header-title h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.history-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-toolbar-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.composer-save-form {
+  display: flex;
+  align-items: center;
+}
+
+.composer-save-form button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 2px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.composer-save-form button:hover {
+  color: var(--primary);
+}
+
+@media (max-width: 600px) {
+  .history-toolbar-actions {
+    width: 100%;
+  }
+}
