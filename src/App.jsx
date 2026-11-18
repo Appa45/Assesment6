@@ -2,15 +2,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   BrowserRouter,
-  Routes,
-  Route,
   Link,
   NavLink,
-  useNavigate,
+  Route,
+  Routes,
   useLocation,
+  useNavigate,
   useParams,
 } from 'react-router-dom';
-
 import './style.css';
 
 const API = 'https://restaurantdata.onrender.com';
@@ -34,86 +33,83 @@ const TIME_SLOTS = {
   Evening: ['05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM'],
 };
 
-const DATE_OPTIONS = ['Today', 'Tomorrow', 'Day After Tomorrow'];
+function listFrom(data, keys = []) {
+  if (Array.isArray(data)) return data;
 
-function getBookings() {
-  try {
-    return JSON.parse(localStorage.getItem(BOOKING_KEY) || '[]');
-  } catch {
-    return [];
+  for (const key of keys) {
+    if (Array.isArray(data?.[key])) return data[key];
   }
+
+  if (data?.data && typeof data.data === 'object') {
+    return listFrom(data.data, keys);
+  }
+
+  return [];
 }
 
-function getItemName(item) {
+function itemName(item) {
   if (typeof item === 'string') return item;
 
   return (
     item?.name ||
-    item?.restaurantName ||
     item?.state ||
     item?.city ||
-    item?.title ||
+    item?.State ||
+    item?.City ||
+    item?.state_name ||
+    item?.city_name ||
     ''
   );
 }
 
-function getRestaurantName(restaurant) {
+function nameOf(restaurant) {
   return (
     restaurant?.restaurantName ||
-    restaurant?.name ||
     restaurant?.restaurant_name ||
+    restaurant?.name ||
     restaurant?.title ||
     'Restaurant'
   );
 }
 
-function getRestaurantId(restaurant, index = 0) {
+function restaurantIdOf(restaurant, index = 0) {
   return (
     restaurant?.id ||
     restaurant?._id ||
     restaurant?.restaurantId ||
     restaurant?.restaurant_id ||
-    String(index)
+    `restaurant-${index}`
   );
 }
 
-function getRestaurantAddress(restaurant) {
-  return (
-    restaurant?.address ||
-    restaurant?.location ||
-    restaurant?.fullAddress ||
-    'Address not available'
-  );
-}
+function readBookings() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(BOOKING_KEY) || '[]'
+    );
 
-function getDateValue(option) {
-  const date = new Date();
+    if (Array.isArray(saved)) return saved;
+    if (Array.isArray(saved?.bookings)) return saved.bookings;
 
-  if (option === 'Tomorrow') {
-    date.setDate(date.getDate() + 1);
-  } else if (option === 'Day After Tomorrow') {
-    date.setDate(date.getDate() + 2);
+    return [];
+  } catch {
+    return [];
   }
-
-  return date;
 }
-
-/* ---------------- HEADER ---------------- */
 
 function Header() {
   return (
     <header className="site-header">
-      <div className="header-container">
-        <Link to="/" className="logo">
-          <span className="logo-icon">🍽️</span>
-          <span>Foodie</span>
+      <div className="header-inner">
+        <Link to="/" className="brand">
+          <span className="brand-icon">R</span>
+          <span>Reserve<span className="brand-highlight">Dine</span></span>
         </Link>
 
-        <nav className="main-navigation">
+        <nav className="main-nav">
           <NavLink to="/" end>
-            Home
+            Find Restaurants
           </NavLink>
-
           <NavLink to="/my-bookings">
             My Bookings
           </NavLink>
@@ -123,23 +119,20 @@ function Header() {
   );
 }
 
-/* ---------------- FOOTER ---------------- */
-
 function Footer() {
   return (
     <footer className="site-footer">
-      <p>© {new Date().getFullYear()} Foodie. All rights reserved.</p>
+      <p>© {new Date().getFullYear()} ReserveDine. Made for good food and great moments.</p>
     </footer>
   );
 }
 
-/* ---------------- DROPDOWN ---------------- */
-
 function LocationDropdown({
   id,
-  placeholder,
+  label,
   value,
-  options,
+  options = [],
+  placeholder,
   onChange,
   disabled = false,
   loading = false,
@@ -147,81 +140,97 @@ function LocationDropdown({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="location-dropdown" id={id}>
-      <button
-        type="button"
-        className="location-dropdown-trigger"
-        disabled={disabled}
-        onClick={() => setOpen((previous) => !previous)}
-        aria-expanded={open}
-      >
-        <span>{value || placeholder}</span>
-        <span className="dropdown-arrow">⌄</span>
-      </button>
+    <div className="filter-field">
+      <label className="filter-label" htmlFor={`${id}-trigger`}>
+        {label}
+      </label>
 
-      {open && (
-        <ul className="location-dropdown-list">
-          {loading ? (
-            <li>Loading options...</li>
-          ) : options.length > 0 ? (
-            options.map((option, index) => {
-              const name = getItemName(option);
+      <div id={id} className="location-dropdown">
+        <button
+          id={`${id}-trigger`}
+          type="button"
+          className="location-dropdown-trigger"
+          disabled={disabled}
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span>{value || (loading ? 'Loading...' : placeholder)}</span>
+          <span className={`dropdown-arrow ${open ? 'is-open' : ''}`}>⌄</span>
+        </button>
 
-              return (
+        {open && !disabled && (
+          <ul className="location-dropdown-list">
+            {loading ? (
+              <li className="dropdown-message">Loading options...</li>
+            ) : options.length > 0 ? (
+              options.map((option) => (
                 <li
-                  key={`${name}-${index}`}
+                  key={option}
                   onClick={() => {
-                    onChange(name);
+                    onChange(option);
                     setOpen(false);
                   }}
                 >
-                  {name}
+                  {option}
                 </li>
-              );
-            })
-          ) : (
-            <li>No options available</li>
-          )}
-        </ul>
-      )}
+              ))
+            ) : (
+              <li className="dropdown-message">No options available</li>
+            )}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ---------------- RESTAURANT CARD ---------------- */
-
 function RestaurantCard({ restaurant, index, onBook }) {
-  const name = getRestaurantName(restaurant);
-  const address = getRestaurantAddress(restaurant);
+  const name = nameOf(restaurant);
+  const address =
+    restaurant?.address ||
+    restaurant?.location ||
+    restaurant?.area ||
+    'Location details available on request';
+
+  const rating = restaurant?.rating || restaurant?.ratings;
+  const image =
+    restaurant?.image ||
+    restaurant?.imageUrl ||
+    restaurant?.image_url ||
+    restaurant?.photo;
 
   return (
     <article className="restaurant-card">
-      <div className="restaurant-card-image">
-        <img
-          src={
-            restaurant?.image ||
-            restaurant?.imageUrl ||
-            restaurant?.image_url ||
-            'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800'
-          }
-          alt={name}
-        />
+      <div className="restaurant-image-wrap">
+        {image ? (
+          <img src={image} alt={name} className="restaurant-image" />
+        ) : (
+          <div className="restaurant-image-placeholder">
+            <span>🍽️</span>
+          </div>
+        )}
+        <span className="restaurant-tag">Popular choice</span>
       </div>
 
       <div className="restaurant-card-content">
-        <h3>{name}</h3>
+        <div className="restaurant-title-row">
+          <h3>{name}</h3>
+          {rating && (
+            <span className="rating">
+              ★ {rating}
+            </span>
+          )}
+        </div>
 
-        <p className="restaurant-address">
-          📍 {address}
-        </p>
+        <p className="restaurant-address">{address}</p>
 
-        <p className="restaurant-rating">
-          ⭐ {restaurant?.rating || 4.5}
-        </p>
+        {restaurant?.cuisine && (
+          <p className="restaurant-cuisine">{restaurant.cuisine}</p>
+        )}
 
         <button
           type="button"
-          className="primary-button reservation-button"
+          className="primary-button restaurant-book-button"
           onClick={() => onBook(restaurant, index)}
         >
           Book FREE Reservation
@@ -231,173 +240,161 @@ function RestaurantCard({ restaurant, index, onBook }) {
   );
 }
 
-/* ---------------- SEARCH PAGE ---------------- */
-
 function SearchPage() {
   const navigate = useNavigate();
 
   const [states, setStates] = useState(FALLBACK_STATES);
   const [cities, setCities] = useState([]);
-
-  const [selectedState, setSelectedState] = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
-
+  const [state, setState] = useState('');
+  const [city, setCity] = useState('');
   const [restaurants, setRestaurants] = useState([]);
-
   const [loadingStates, setLoadingStates] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
-  const [loadingRestaurants, setLoadingRestaurants] = useState(false);
-
+  const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState('');
 
-  // Load states
   useEffect(() => {
     let active = true;
 
-    async function fetchStates() {
+    async function loadStates() {
       setLoadingStates(true);
 
       try {
         const response = await fetch(`${API}/states`);
-
-        if (!response.ok) {
-          throw new Error('Unable to load states');
-        }
+        if (!response.ok) throw new Error('Unable to load states');
 
         const data = await response.json();
+        const stateList = listFrom(data, ['states', 'data', 'results'])
+          .map(itemName)
+          .filter(Boolean);
 
-        if (active && Array.isArray(data) && data.length > 0) {
-          setStates(data.map(getItemName).filter(Boolean));
+        if (active && stateList.length > 0) {
+          setStates(stateList);
         }
       } catch {
-        if (active) {
-          setStates(FALLBACK_STATES);
-        }
+        // Keep the fallback state list available if the API is temporarily unavailable.
+        if (active) setStates(FALLBACK_STATES);
       } finally {
-        if (active) {
-          setLoadingStates(false);
-        }
+        if (active) setLoadingStates(false);
       }
     }
 
-    fetchStates();
+    loadStates();
 
     return () => {
       active = false;
     };
   }, []);
 
-  // Load cities whenever state changes
   useEffect(() => {
-    let active = true;
-
-    if (!selectedState) {
+    if (!state) {
       setCities([]);
+      setCity('');
+      setLoadingCities(false);
       return undefined;
     }
 
-    async function fetchCities() {
+    let active = true;
+
+    async function loadCities() {
       setLoadingCities(true);
       setCities([]);
-      setSelectedCity('');
+      setCity('');
+      setError('');
 
       try {
         const response = await fetch(
-          `${API}/cities/${encodeURIComponent(selectedState)}`
+          `${API}/cities/${encodeURIComponent(state)}`
         );
 
         if (!response.ok) {
-          throw new Error('Unable to load cities');
+          throw new Error('Could not load cities. Please try again.');
         }
 
         const data = await response.json();
+        const cityList = Array.isArray(data)
+          ? data
+          : listFrom(data, ['cities', 'data', 'results']);
 
-        if (active && Array.isArray(data)) {
-          setCities(data.map(getItemName).filter(Boolean));
-        }
-      } catch {
         if (active) {
-          setCities([]);
+          setCities(cityList.map(itemName).filter(Boolean));
+        }
+      } catch (err) {
+        if (active) {
+          setError(err.message || 'Could not load cities.');
         }
       } finally {
-        if (active) {
-          setLoadingCities(false);
-        }
+        if (active) setLoadingCities(false);
       }
     }
 
-    fetchCities();
+    loadCities();
 
     return () => {
       active = false;
     };
-  }, [selectedState]);
+  }, [state]);
 
-  function handleStateChange(state) {
-    setSelectedState(state);
-    setSelectedCity('');
+  function handleStateChange(value) {
+    setState(value);
+    setCity('');
     setCities([]);
     setRestaurants([]);
     setSearched(false);
     setError('');
   }
 
-  function handleCityChange(city) {
-    setSelectedCity(city);
-    setRestaurants([]);
-    setSearched(false);
-    setError('');
-  }
+  async function handleSearch(event) {
+    event.preventDefault();
 
-  // Search restaurants
-  async function handleSearch() {
-    if (!selectedState || !selectedCity) {
-      setError('Please select both state and city.');
+    if (!state || !city) {
+      setError('Please select both a state and a city.');
       return;
     }
 
-    setLoadingRestaurants(true);
-    setSearched(true);
+    setSearching(true);
     setError('');
     setRestaurants([]);
+    setSearched(true);
 
     try {
-      const params = new URLSearchParams({
-        state: selectedState,
-        city: selectedCity,
-      });
+      const params = new URLSearchParams();
+      params.set('state', state);
+      params.set('city', city);
 
-      const response = await fetch(
-        `${API}/restaurants?${params.toString()}`
-      );
+      const response = await fetch(`${API}/restaurants?${params.toString()}`);
 
       if (!response.ok) {
-        throw new Error('Unable to fetch restaurants.');
+        throw new Error('Unable to load restaurants. Please try again.');
       }
 
       const data = await response.json();
-
       const restaurantList = Array.isArray(data)
         ? data
-        : data?.restaurants || data?.data || [];
+        : listFrom(data, ['restaurants', 'data', 'results']);
 
       setRestaurants(restaurantList);
+      sessionStorage.setItem('selectedState', state);
+      sessionStorage.setItem('selectedCity', city);
+      sessionStorage.setItem(
+        'searchRestaurants',
+        JSON.stringify(restaurantList)
+      );
     } catch (err) {
-      setError(err.message || 'Something went wrong.');
-      setRestaurants([]);
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
-      setLoadingRestaurants(false);
+      setSearching(false);
     }
   }
 
   function handleBook(restaurant, index) {
-    navigate(`/booking/${getRestaurantId(restaurant, index)}`, {
-      state: {
-        restaurant,
-        state: selectedState,
-        city: selectedCity,
-      },
+    const id = restaurantIdOf(restaurant, index);
+
+    sessionStorage.setItem('selectedRestaurant', JSON.stringify(restaurant));
+
+    navigate(`/booking/${encodeURIComponent(id)}`, {
+      state: { restaurant, state, city },
     });
   }
 
@@ -405,80 +402,81 @@ function SearchPage() {
     <main>
       <section className="hero-section">
         <div className="hero-content">
-          <span className="hero-label">WELCOME TO FOODIE</span>
-
-          <h1>Discover and Book Your Favourite Restaurants</h1>
-
+          <span className="eyebrow">GOOD FOOD. GREAT MOMENTS.</span>
+          <h1>Find your table.<br />Make it memorable.</h1>
           <p>
-            Find the perfect place for your next dining experience.
-            Explore restaurants and reserve your table easily.
+            Discover restaurants around you and reserve your perfect dining
+            experience in just a few clicks.
           </p>
         </div>
       </section>
 
       <section className="search-section">
         <div className="search-panel">
-          <h2>Find Restaurants Near You</h2>
-
-          <div className="search-fields">
-            <div className="search-field">
-              <label>Select State</label>
-
-              <LocationDropdown
-                id="state"
-                placeholder="Choose State"
-                value={selectedState}
-                options={states}
-                loading={loadingStates}
-                onChange={handleStateChange}
-              />
+          <div className="search-panel-heading">
+            <div>
+              <span className="section-kicker">EXPLORE RESTAURANTS</span>
+              <h2>Where would you like to dine?</h2>
             </div>
+            <span className="search-icon">⌕</span>
+          </div>
 
-            <div className="search-field">
-              <label>Select City</label>
+          <form className="location-form" onSubmit={handleSearch}>
+            <LocationDropdown
+              id="state"
+              label="State"
+              value={state}
+              options={states}
+              placeholder="Select a state"
+              loading={loadingStates}
+              onChange={handleStateChange}
+            />
 
-              <LocationDropdown
-                id="city"
-                placeholder="Choose City"
-                value={selectedCity}
-                options={cities}
-                loading={loadingCities}
-                disabled={!selectedState}
-                onChange={handleCityChange}
-              />
-            </div>
+            <LocationDropdown
+              id="city"
+              label="City"
+              value={city}
+              options={cities}
+              placeholder="Select a city"
+              disabled={!state}
+              loading={loadingCities}
+              onChange={(value) => {
+                setCity(value);
+                setError('');
+              }}
+            />
 
             <button
-              type="button"
               id="searchBtn"
+              type="submit"
               className="primary-button search-button"
-              onClick={handleSearch}
-              disabled={loadingRestaurants}
+              disabled={searching}
             >
-              {loadingRestaurants ? 'Searching...' : 'Search'}
+              {searching ? 'Searching...' : 'Search'}
             </button>
-          </div>
+          </form>
 
           {error && <p className="error-message">{error}</p>}
         </div>
       </section>
 
-      <section className="restaurants-section">
-        {loadingRestaurants && (
-          <p className="loading-message">Loading restaurants...</p>
-        )}
-
-        {!loadingRestaurants && searched && (
+      <section className="results-section">
+        {searched && !searching && (
           <>
-            <h1>
-              {restaurants.length} restaurants available in {selectedCity}
-            </h1>
+            <div className="results-heading">
+              <div>
+                <span className="section-kicker">YOUR OPTIONS</span>
+                <h1>
+                  {restaurants.length} restaurants available in {city}
+                </h1>
+              </div>
+            </div>
 
             {restaurants.length > 0 ? (
               <div className="restaurant-grid">
                 {restaurants.map((restaurant, index) => (
                   <RestaurantCard
-                    key={getRestaurantId(restaurant, index)}
+                    key={restaurantIdOf(restaurant, index)}
                     restaurant={restaurant}
                     index={index}
                     onBook={handleBook}
@@ -486,110 +484,152 @@ function SearchPage() {
                 ))}
               </div>
             ) : (
-              <p className="empty-message">
-                No restaurants found in {selectedCity}.
-              </p>
+              <div className="empty-state">
+                <span>🍽️</span>
+                <h3>No restaurants found</h3>
+                <p>Try selecting another location.</p>
+              </div>
             )}
           </>
+        )}
+
+        {searching && (
+          <div className="loading-state">
+            <span className="loading-spinner" />
+            <p>Finding the best restaurants for you...</p>
+          </div>
         )}
       </section>
     </main>
   );
 }
 
-/* ---------------- BOOKING PAGE ---------------- */
-
 function BookingPage({ onConfirm }) {
-  const navigate = useNavigate();
+  const { restaurantId } = useParams();
   const location = useLocation();
-  const { id } = useParams();
+  const navigate = useNavigate();
 
-  const restaurant = location.state?.restaurant || {
-    id,
-    name: 'Restaurant',
-    address: 'Address not available',
-    rating: 4.5,
-  };
-
-  const state = location.state?.state || '';
-  const city = location.state?.city || '';
-
+  const [restaurant, setRestaurant] = useState(
+    location.state?.restaurant || null
+  );
   const [selectedDate, setSelectedDate] = useState('Today');
   const [selectedTime, setSelectedTime] = useState('');
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [bookingError, setBookingError] = useState('');
 
-  const [guestCount, setGuestCount] = useState('2');
-  const [bookingEmail, setBookingEmail] = useState('');
+  useEffect(() => {
+    if (restaurant) return;
 
-  const [confirmationMessage, setConfirmationMessage] = useState('');
+    try {
+      const savedRestaurant = JSON.parse(
+        sessionStorage.getItem('selectedRestaurant') || 'null'
+      );
 
-  function handleBooking() {
+      if (savedRestaurant) setRestaurant(savedRestaurant);
+    } catch {
+      setRestaurant(null);
+    }
+  }, [restaurantId, restaurant]);
+
+  const dateOptions = [
+    'Today',
+    'Tomorrow',
+    new Date(Date.now() + 2 * 86400000).toLocaleDateString('en-US', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    }),
+  ];
+
+  function confirmBooking(event) {
+    event.preventDefault();
+
     if (!selectedTime) {
-      setConfirmationMessage('Please select a time slot.');
+      setBookingError('Please select a time slot.');
       return;
     }
 
-    if (!bookingEmail.trim()) {
-      setConfirmationMessage('Please enter your email address.');
+    if (!guestName.trim() || !guestEmail.trim()) {
+      setBookingError('Please enter your name and email.');
       return;
     }
-
-    const bookingDate = getDateValue(selectedDate);
 
     const booking = {
-      restaurantName: getRestaurantName(restaurant),
-      restaurantId: id,
-      rating: restaurant?.rating || 4.5,
-      address: getRestaurantAddress(restaurant),
-      city,
-      state,
-      bookingDate: bookingDate.toISOString(),
+      restaurantName: nameOf(restaurant || {}),
+      rating: restaurant?.rating || 0,
+      address:
+        restaurant?.address ||
+        restaurant?.location ||
+        'Address not provided',
+      city: location.state?.city || sessionStorage.getItem('selectedCity') || '',
+      state:
+        location.state?.state ||
+        sessionStorage.getItem('selectedState') ||
+        '',
+      bookingDate: new Date().toISOString(),
       bookingTime: selectedTime,
-      bookingEmail: bookingEmail.trim(),
-      guests: Number(guestCount),
+      bookingEmail: guestEmail,
+      guestName,
+      guestPhone,
+      restaurantId,
+      selectedDate,
     };
 
     onConfirm(booking);
-
     navigate('/my-bookings');
   }
 
-  return (
-    <main className="booking-page">
-      <section className="booking-container">
-        <div className="booking-heading">
-          <h1>Book Your Table</h1>
-
-          <p>
-            Reserve your table at {getRestaurantName(restaurant)}
-          </p>
+  if (!restaurant) {
+    return (
+      <main className="page-container">
+        <div className="empty-state">
+          <h2>Restaurant details not found</h2>
+          <p>Please return to the search page and choose a restaurant.</p>
+          <Link to="/" className="primary-button inline-button">
+            Find Restaurants
+          </Link>
         </div>
+      </main>
+    );
+  }
 
-        <div className="booking-card">
-          <div className="booking-restaurant-details">
-            <h2>{getRestaurantName(restaurant)}</h2>
+  return (
+    <main className="booking-page page-container">
+      <div className="page-heading">
+        <span className="section-kicker">COMPLETE YOUR RESERVATION</span>
+        <h1>Book your table</h1>
+        <p>Choose your date and preferred dining time.</p>
+      </div>
 
-            <p>{getRestaurantAddress(restaurant)}</p>
-
-            <p>⭐ {restaurant?.rating || 4.5}</p>
+      <div className="booking-layout">
+        <section className="booking-main-card">
+          <div className="booking-restaurant">
+            <div className="booking-restaurant-icon">🍽️</div>
+            <div>
+              <h2>{nameOf(restaurant)}</h2>
+              <p>
+                {restaurant.address ||
+                  restaurant.location ||
+                  'Restaurant reservation'}
+              </p>
+            </div>
           </div>
 
           <div className="booking-divider" />
 
-          {/* DATE OPTIONS */}
-          <section className="booking-section">
-            <h2>Select Date</h2>
-
+          <section className="date-selection">
+            <h2>Select a date</h2>
             <div className="date-options">
-              {DATE_OPTIONS.map((date) => (
+              {dateOptions.map((date) => (
                 <button
                   type="button"
                   key={date}
-                  className={`date-option ${
-                    selectedDate === date ? 'active' : ''
-                  }`}
+                  className={`date-option ${selectedDate === date ? 'selected' : ''}`}
                   onClick={() => setSelectedDate(date)}
                 >
-                  <p>{date}</p>
+                  <span>{date}</span>
                 </button>
               ))}
             </div>
@@ -597,195 +637,165 @@ function BookingPage({ onConfirm }) {
 
           <div className="booking-divider" />
 
-          {/* TIME SLOTS */}
-          <section className="booking-section">
-            <h2>Select Time</h2>
+          <section className="time-selection">
+            <h2>Choose a time</h2>
 
             {Object.entries(TIME_SLOTS).map(([period, slots]) => (
               <div className="time-period" key={period}>
-                <p className="time-period-title">{period}</p>
-
+                <p>{period}</p>
                 <div className="time-slots">
-                  {slots.map((time) => (
+                  {slots.map((slot) => (
                     <button
                       type="button"
-                      key={time}
-                      className={`time-slot ${
-                        selectedTime === time ? 'active' : ''
-                      }`}
+                      key={slot}
+                      className={`time-slot ${selectedTime === slot ? 'selected' : ''}`}
                       onClick={() => {
-                        setSelectedTime(time);
-                        setConfirmationMessage('');
+                        setSelectedTime(slot);
+                        setBookingError('');
                       }}
                     >
-                      {time}
+                      {slot}
                     </button>
                   ))}
                 </div>
               </div>
             ))}
           </section>
+        </section>
 
-          <div className="booking-divider" />
+        <aside className="booking-details-card">
+          <h2>Your details</h2>
+          <form onSubmit={confirmBooking}>
+            <label htmlFor="guestName">Full name</label>
+            <input
+              id="guestName"
+              type="text"
+              value={guestName}
+              onChange={(event) => setGuestName(event.target.value)}
+              placeholder="Enter your name"
+              required
+            />
 
-          {/* GUEST DETAILS */}
-          <section className="booking-section">
-            <h2>Booking Details</h2>
+            <label htmlFor="guestEmail">Email address</label>
+            <input
+              id="guestEmail"
+              type="email"
+              value={guestEmail}
+              onChange={(event) => setGuestEmail(event.target.value)}
+              placeholder="Enter your email"
+              required
+            />
 
-            <div className="booking-form">
-              <div className="form-group">
-                <label htmlFor="guestCount">Number of Guests</label>
+            <label htmlFor="guestPhone">Phone number</label>
+            <input
+              id="guestPhone"
+              type="tel"
+              value={guestPhone}
+              onChange={(event) => setGuestPhone(event.target.value)}
+              placeholder="Enter your phone number"
+            />
 
-                <select
-                  id="guestCount"
-                  value={guestCount}
-                  onChange={(event) => setGuestCount(event.target.value)}
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => (
-                    <option key={count} value={count}>
-                      {count} {count === 1 ? 'Guest' : 'Guests'}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {bookingError && (
+              <p className="error-message">{bookingError}</p>
+            )}
 
-              <div className="form-group">
-                <label htmlFor="bookingEmail">Email Address</label>
-
-                <input
-                  id="bookingEmail"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={bookingEmail}
-                  onChange={(event) => {
-                    setBookingEmail(event.target.value);
-                    setConfirmationMessage('');
-                  }}
-                />
-              </div>
-            </div>
-          </section>
-
-          {confirmationMessage && (
-            <p className="error-message">{confirmationMessage}</p>
-          )}
-
-          <button
-            type="button"
-            className="primary-button confirm-booking-button"
-            onClick={handleBooking}
-          >
-            Confirm Reservation
-          </button>
-        </div>
-      </section>
+            <button type="submit" className="primary-button confirm-button">
+              Confirm Reservation
+            </button>
+          </form>
+          <p className="booking-note">No payment required to reserve your table.</p>
+        </aside>
+      </div>
     </main>
   );
 }
-
-/* ---------------- MY BOOKINGS PAGE ---------------- */
 
 function MyBookings({ bookings }) {
   return (
-    <main className="my-bookings-page">
-      <section className="my-bookings-container">
-        <div className="my-bookings-heading">
-          <h1>My Bookings</h1>
+    <main className="my-bookings-page page-container">
+      <div className="page-heading">
+        <span className="section-kicker">YOUR DINING PLANS</span>
+        <h1>My Bookings</h1>
+        <p>All your upcoming reservations in one place.</p>
+      </div>
 
-          <p>View your restaurant reservations.</p>
+      {bookings.length === 0 ? (
+        <div className="empty-state">
+          <span>📅</span>
+          <h2>No bookings yet</h2>
+          <p>Your confirmed restaurant reservations will appear here.</p>
+          <Link to="/" className="primary-button inline-button">
+            Explore Restaurants
+          </Link>
         </div>
+      ) : (
+        <div className="bookings-list">
+          {bookings.map((booking, index) => (
+            <article className="booking-card" key={`${booking.restaurantName}-${index}`}>
+              <div className="booking-card-icon">🍽️</div>
 
-        {bookings.length === 0 ? (
-          <div className="empty-bookings">
-            <h2>No bookings yet</h2>
-
-            <p>Your reservations will appear here.</p>
-
-            <Link to="/" className="primary-button">
-              Explore Restaurants
-            </Link>
-          </div>
-        ) : (
-          <div className="bookings-grid">
-            {bookings.map((booking, index) => (
-              <article
-                className="booking-history-card"
-                key={`${booking.restaurantId || booking.restaurantName}-${index}`}
-              >
-                <div className="booking-history-content">
-                  <h3>{booking.restaurantName}</h3>
-
-                  <p>📍 {booking.address}</p>
-
-                  <p>
-                    {booking.city}, {booking.state}
-                  </p>
-
-                  <p>
-                    📅{' '}
-                    {booking.bookingDate
-                      ? new Date(booking.bookingDate).toLocaleDateString()
-                      : 'Date not available'}
-                  </p>
-
-                  <p>🕒 {booking.bookingTime}</p>
-
-                  <p>✉️ {booking.bookingEmail}</p>
-
-                  {booking.guests && (
-                    <p>👥 {booking.guests} Guests</p>
+              <div className="booking-card-content">
+                <span className="booking-status">TABLE RESERVED</span>
+                <h3>{booking.restaurantName}</h3>
+                <p>{booking.address}</p>
+                <p>
+                  {booking.city}
+                  {booking.state ? `, ${booking.state}` : ''}
+                </p>
+                <div className="booking-meta">
+                  {booking.bookingDate && (
+                    <span>
+                      📅 {new Date(booking.bookingDate).toLocaleDateString()}
+                    </span>
                   )}
-
-                  <p>⭐ {booking.rating || 4.5}</p>
+                  {booking.bookingTime && (
+                    <span>🕒 {booking.bookingTime}</span>
+                  )}
+                  {booking.bookingEmail && (
+                    <span>✉️ {booking.bookingEmail}</span>
+                  )}
                 </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
 
-/* ---------------- APP SHELL ---------------- */
-
 function AppShell() {
-  const [bookings, setBookings] = useState(getBookings);
+  const [bookings, setBookings] = useState(readBookings);
 
   useEffect(() => {
     localStorage.setItem(BOOKING_KEY, JSON.stringify(bookings));
   }, [bookings]);
 
   function addBooking(booking) {
-    setBookings((previous) => [...previous, booking]);
+    setBookings((current) => [...current, booking]);
   }
 
   return (
-    <>
+    <div className="app">
       <Header />
 
       <Routes>
         <Route path="/" element={<SearchPage />} />
-
         <Route
-          path="/booking/:id"
+          path="/booking/:restaurantId"
           element={<BookingPage onConfirm={addBooking} />}
         />
-
         <Route
           path="/my-bookings"
           element={<MyBookings bookings={bookings} />}
         />
-
         <Route path="*" element={<SearchPage />} />
       </Routes>
 
       <Footer />
-    </>
+    </div>
   );
 }
-
-/* ---------------- ROOT APP ---------------- */
 
 export default function App() {
   return (
