@@ -1,0 +1,163 @@
+
+{
+  "greetings": [
+    "Hello! Welcome to Product Recommendation AI. What product are you looking for today?",
+    "Hi there! I can help you find products that match your needs and budget."
+  ],
+  "products": [
+    {
+      "id": "laptop",
+      "name": "Laptop",
+      "keywords": ["laptop", "notebook", "computer", "macbook"],
+      "prompt": "Great choice! What is your budget range for a laptop? For example, 30000-60000.",
+      "recommendations": [
+        {
+          "name": "Lenovo IdeaPad Slim 3",
+          "price": 42990,
+          "description": "A reliable laptop for everyday tasks, studying, and office work."
+        },
+        {
+          "name": "HP 15s",
+          "price": 51990,
+          "description": "A versatile laptop with a large display and good everyday performance."
+        },
+        {
+          "name": "ASUS Vivobook 15",
+          "price": 57990,
+          "description": "A lightweight laptop suitable for multitasking and productivity."
+        },
+        {
+          "name": "Apple MacBook Air",
+          "price": 89990,
+          "description": "A premium laptop with excellent battery life and performance."
+        }
+      ]
+    },
+    {
+      "id": "mobile",
+      "name": "Mobile Phone",
+      "keywords": ["mobile", "phone", "smartphone", "iphone", "android"],
+      "prompt": "Sure! What is your preferred budget range for a mobile phone? For example, 15000-30000.",
+      "recommendations": [
+        {
+          "name": "Samsung Galaxy M35",
+          "price": 16999,
+          "description": "A versatile smartphone with a vibrant display and dependable battery."
+        },
+        {
+          "name": "OnePlus Nord CE 4",
+          "price": 24999,
+          "description": "A smooth-performing phone with fast charging."
+        },
+        {
+          "name": "Google Pixel 8a",
+          "price": 39999,
+          "description": "A smartphone with an excellent camera and clean software."
+        },
+        {
+          "name": "iPhone 15",
+          "price": 59900,
+          "description": "A premium smartphone with a powerful processor and camera."
+        }
+      ]
+    },
+    {
+      "id": "headphones",
+      "name": "Headphones",
+      "keywords": ["headphone", "headphones", "earphone", "earphones", "headset", "earbuds"],
+      "prompt": "I'd be happy to help! What budget range do you have in mind for headphones? For example, 2000-8000.",
+      "recommendations": [
+        {
+          "name": "boAt Rockerz 450",
+          "price": 1499,
+          "description": "Affordable wireless headphones for everyday listening."
+        },
+        {
+          "name": "Sony WH-CH520",
+          "price": 4490,
+          "description": "Lightweight wireless headphones with long battery life."
+        },
+        {
+          "name": "JBL Tune 770NC",
+          "price": 6999,
+          "description": "Wireless headphones with adaptive noise cancellation."
+        },
+        {
+          "name": "Sony WH-1000XM5",
+          "price": 24990,
+          "description": "Premium noise-cancelling headphones with immersive sound."
+        }
+      ]
+    },
+    {
+      "id": "watch",
+      "name": "Smart Watch",
+      "keywords": ["watch", "smartwatch", "smart watch", "fitness watch"],
+      "prompt": "What is your budget range for a smartwatch? For example, 2000-10000.",
+      "recommendations": [
+        {
+          "name": "Noise ColorFit Pulse",
+          "price": 1999,
+          "description": "An affordable smartwatch for basic fitness tracking."
+        },
+        {
+          "name": "Amazfit Bip 5",
+          "price": 5999,
+          "description": "A smartwatch with useful fitness and health tracking features."
+        },
+        {
+          "name": "Samsung Galaxy Watch 6",
+          "price": 14999,
+          "description": "A feature-rich smartwatch with a bright display."
+        }
+      ]
+    },
+    {
+      "id": "tablet",
+      "name": "Tablet",
+      "keywords": ["tablet", "ipad", "tab"],
+      "prompt": "What budget range are you considering for a tablet? For example, 15000-40000.",
+      "recommendations": [
+        {
+          "name": "Samsung Galaxy Tab A9",
+          "price": 12999,
+          "description": "A compact tablet for entertainment and everyday use."
+        },
+        {
+          "name": "Xiaomi Pad 6",
+          "price": 26999,
+          "description": "A powerful tablet for entertainment and productivity."
+        },
+        {
+          "name": "Apple iPad",
+          "price": 34900,
+          "description": "A versatile tablet for creative work, study, and entertainment."
+        }
+      ]
+    },
+    {
+      "id": "camera",
+      "name": "Camera",
+      "keywords": ["camera", "dslr", "mirrorless", "photography"],
+      "prompt": "What is your budget range for a camera? For example, 30000-80000.",
+      "recommendations": [
+        {
+          "name": "Canon EOS 1500D",
+          "price": 35999,
+          "description": "An entry-level DSLR for learning photography."
+        },
+        {
+          "name": "Sony Alpha ZV-E10",
+          "price": 59990,
+          "description": "A mirrorless camera ideal for content creation."
+        },
+        {
+          "name": "Canon EOS R50",
+          "price": 74990,
+          "description": "A compact mirrorless camera for photography and video."
+        }
+      ]
+    }
+  ],
+  "fallback": "Sorry, I did not understand your query!"
+}

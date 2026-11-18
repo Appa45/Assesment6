@@ -1,777 +1,413 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Route, Routes, useNavigate } from 'react-router-dom';
 import {
-  BrowserRouter,
-  Link,
-  NavLink,
-  Route,
-  Routes,
-  useLocation,
-  useNavigate,
-  useParams,
-} from 'react-router-dom';
-import './style.css';
+  Bot,
+  MessageCircle,
+  Send,
+  Save,
+  Plus,
+  History,
+  Sun,
+  Moon,
+  ThumbsUp,
+  ThumbsDown,
+  Star,
+  Menu,
+  X,
+  ShoppingBag,
+  Sparkles,
+  ArrowLeft,
+  Trash2,
+} from 'lucide-react';
 
-const API = 'https://restaurantdata.onrender.com';
-const BOOKING_KEY = 'bookings';
+import responseData from './data/responses.json';
 
-const FALLBACK_STATES = [
-  'Andhra Pradesh',
-  'California',
-  'Florida',
-  'Karnataka',
-  'Maharashtra',
-  'New York',
-  'Tamil Nadu',
-  'Texas',
-  'Telangana',
-];
+const CHAT_KEY = 'product-ai-conversations';
+const THEME_KEY = 'product-ai-theme';
+const FEEDBACK_KEY = 'product-ai-feedback';
 
-const TIME_SLOTS = {
-  Morning: ['09:00 AM', '10:00 AM', '11:00 AM'],
-  Afternoon: ['12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM'],
-  Evening: ['05:00 PM', '06:00 PM', '07:00 PM', '08:00 PM'],
-};
-
-function listFrom(data, keys = []) {
-  if (Array.isArray(data)) return data;
-
-  for (const key of keys) {
-    if (Array.isArray(data?.[key])) return data[key];
-  }
-
-  if (data?.data && typeof data.data === 'object') {
-    return listFrom(data.data, keys);
-  }
-
-  return [];
-}
-
-function itemName(item) {
-  if (typeof item === 'string') return item;
-
-  return (
-    item?.name ||
-    item?.state ||
-    item?.city ||
-    item?.State ||
-    item?.City ||
-    item?.state_name ||
-    item?.city_name ||
-    ''
-  );
-}
-
-function nameOf(restaurant) {
-  return (
-    restaurant?.restaurantName ||
-    restaurant?.restaurant_name ||
-    restaurant?.name ||
-    restaurant?.title ||
-    'Restaurant'
-  );
-}
-
-function restaurantIdOf(restaurant, index = 0) {
-  return (
-    restaurant?.id ||
-    restaurant?._id ||
-    restaurant?.restaurantId ||
-    restaurant?.restaurant_id ||
-    `restaurant-${index}`
-  );
-}
-
-function readBookings() {
+function readStorage(key, fallback) {
   try {
-    const saved = JSON.parse(
-      localStorage.getItem(BOOKING_KEY) || '[]'
-    );
-
-    if (Array.isArray(saved)) return saved;
-    if (Array.isArray(saved?.bookings)) return saved.bookings;
-
-    return [];
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function Header() {
-  return (
-    <header className="site-header">
-      <div className="header-inner">
-        <Link to="/" className="brand">
-          <span className="brand-icon">R</span>
-          <span>Reserve<span className="brand-highlight">Dine</span></span>
-        </Link>
+function createId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
-        <nav className="main-nav">
-          <NavLink to="/" end>
-            Find Restaurants
-          </NavLink>
-          <NavLink to="/my-bookings">
-            My Bookings
-          </NavLink>
-        </nav>
+function createMessage(role, content, extra = {}) {
+  return {
+    id: createId(),
+    role,
+    content,
+    timestamp: new Date().toISOString(),
+    ...extra,
+  };
+}
+
+function getProduct(query) {
+  const normalized = query.toLowerCase();
+
+  return responseData.products.find((product) =>
+    product.keywords.some((keyword) =>
+      normalized.includes(keyword.toLowerCase())
+    )
+  );
+}
+
+function parseBudget(text) {
+  const numbers = text.match(/[\d,]+(?:\.\d+)?/g);
+
+  if (!numbers || numbers.length < 2) {
+    return null;
+  }
+
+  const min = Number(numbers[0].replace(/,/g, ''));
+  const max = Number(numbers[1].replace(/,/g, ''));
+
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) {
+    return null;
+  }
+
+  return { min, max };
+}
+
+function formatPrice(price) {
+  return `₹${Number(price).toLocaleString('en-IN')}`;
+}
+
+function getGreeting() {
+  return responseData.greetings[0];
+}
+
+function createInitialMessages() {
+  return [createMessage('assistant', getGreeting())];
+}
+
+function ProductCard({ product }) {
+  return (
+    <div className="product-card">
+      <div className="product-card-icon">
+        <ShoppingBag size={21} />
       </div>
-    </header>
-  );
-}
-
-function Footer() {
-  return (
-    <footer className="site-footer">
-      <p>© {new Date().getFullYear()} ReserveDine. Made for good food and great moments.</p>
-    </footer>
-  );
-}
-
-function LocationDropdown({
-  id,
-  label,
-  value,
-  options = [],
-  placeholder,
-  onChange,
-  disabled = false,
-  loading = false,
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="filter-field">
-      <label className="filter-label" htmlFor={`${id}-trigger`}>
-        {label}
-      </label>
-
-      <div id={id} className="location-dropdown">
-        <button
-          id={`${id}-trigger`}
-          type="button"
-          className="location-dropdown-trigger"
-          disabled={disabled}
-          aria-expanded={open}
-          onClick={() => setOpen((current) => !current)}
-        >
-          <span>{value || (loading ? 'Loading...' : placeholder)}</span>
-          <span className={`dropdown-arrow ${open ? 'is-open' : ''}`}>⌄</span>
-        </button>
-
-        {open && !disabled && (
-          <ul className="location-dropdown-list">
-            {loading ? (
-              <li className="dropdown-message">Loading options...</li>
-            ) : options.length > 0 ? (
-              options.map((option) => (
-                <li
-                  key={option}
-                  onClick={() => {
-                    onChange(option);
-                    setOpen(false);
-                  }}
-                >
-                  {option}
-                </li>
-              ))
-            ) : (
-              <li className="dropdown-message">No options available</li>
-            )}
-          </ul>
-        )}
+      <div className="product-card-info">
+        <h4>{product.name}</h4>
+        <p>{product.description}</p>
+        <strong>{formatPrice(product.price)}</strong>
       </div>
     </div>
   );
 }
 
-function RestaurantCard({ restaurant, index, onBook }) {
-  const name = nameOf(restaurant);
-  const address =
-    restaurant?.address ||
-    restaurant?.location ||
-    restaurant?.area ||
-    'Location details available on request';
+function MessageFeedback({ message, onFeedback, feedback }) {
+  const [rating, setRating] = useState(feedback?.rating || 0);
+  const [comment, setComment] = useState(feedback?.comment || '');
+  const [showRating, setShowRating] = useState(feedback?.type === 'like');
+  const [showComment, setShowComment] = useState(feedback?.type === 'dislike');
 
-  const rating = restaurant?.rating || restaurant?.ratings;
-  const image =
-    restaurant?.image ||
-    restaurant?.imageUrl ||
-    restaurant?.image_url ||
-    restaurant?.photo;
-
-  return (
-    <article className="restaurant-card">
-      <div className="restaurant-image-wrap">
-        {image ? (
-          <img src={image} alt={name} className="restaurant-image" />
-        ) : (
-          <div className="restaurant-image-placeholder">
-            <span>🍽️</span>
-          </div>
-        )}
-        <span className="restaurant-tag">Popular choice</span>
-      </div>
-
-      <div className="restaurant-card-content">
-        <div className="restaurant-title-row">
-          <h3>{name}</h3>
-          {rating && (
-            <span className="rating">
-              ★ {rating}
-            </span>
-          )}
-        </div>
-
-        <p className="restaurant-address">{address}</p>
-
-        {restaurant?.cuisine && (
-          <p className="restaurant-cuisine">{restaurant.cuisine}</p>
-        )}
-
-        <button
-          type="button"
-          className="primary-button restaurant-book-button"
-          onClick={() => onBook(restaurant, index)}
-        >
-          Book FREE Reservation
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function SearchPage() {
-  const navigate = useNavigate();
-
-  const [states, setStates] = useState(FALLBACK_STATES);
-  const [cities, setCities] = useState([]);
-  const [state, setState] = useState('');
-  const [city, setCity] = useState('');
-  const [restaurants, setRestaurants] = useState([]);
-  const [loadingStates, setLoadingStates] = useState(false);
-  const [loadingCities, setLoadingCities] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadStates() {
-      setLoadingStates(true);
-
-      try {
-        const response = await fetch(`${API}/states`);
-        if (!response.ok) throw new Error('Unable to load states');
-
-        const data = await response.json();
-        const stateList = listFrom(data, ['states', 'data', 'results'])
-          .map(itemName)
-          .filter(Boolean);
-
-        if (active && stateList.length > 0) {
-          setStates(stateList);
-        }
-      } catch {
-        // Keep the fallback state list available if the API is temporarily unavailable.
-        if (active) setStates(FALLBACK_STATES);
-      } finally {
-        if (active) setLoadingStates(false);
-      }
-    }
-
-    loadStates();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!state) {
-      setCities([]);
-      setCity('');
-      setLoadingCities(false);
-      return undefined;
-    }
-
-    let active = true;
-
-    async function loadCities() {
-      setLoadingCities(true);
-      setCities([]);
-      setCity('');
-      setError('');
-
-      try {
-        const response = await fetch(
-          `${API}/cities/${encodeURIComponent(state)}`
-        );
-
-        if (!response.ok) {
-          throw new Error('Could not load cities. Please try again.');
-        }
-
-        const data = await response.json();
-        const cityList = Array.isArray(data)
-          ? data
-          : listFrom(data, ['cities', 'data', 'results']);
-
-        if (active) {
-          setCities(cityList.map(itemName).filter(Boolean));
-        }
-      } catch (err) {
-        if (active) {
-          setError(err.message || 'Could not load cities.');
-        }
-      } finally {
-        if (active) setLoadingCities(false);
-      }
-    }
-
-    loadCities();
-
-    return () => {
-      active = false;
-    };
-  }, [state]);
-
-  function handleStateChange(value) {
-    setState(value);
-    setCity('');
-    setCities([]);
-    setRestaurants([]);
-    setSearched(false);
-    setError('');
+  function handleLike() {
+    setShowRating(true);
+    setShowComment(false);
+    onFeedback(message.id, { type: 'like', rating: 0, comment: '' });
   }
 
-  async function handleSearch(event) {
-    event.preventDefault();
-
-    if (!state || !city) {
-      setError('Please select both a state and a city.');
-      return;
-    }
-
-    setSearching(true);
-    setError('');
-    setRestaurants([]);
-    setSearched(true);
-
-    try {
-      const params = new URLSearchParams();
-      params.set('state', state);
-      params.set('city', city);
-
-      const response = await fetch(`${API}/restaurants?${params.toString()}`);
-
-      if (!response.ok) {
-        throw new Error('Unable to load restaurants. Please try again.');
-      }
-
-      const data = await response.json();
-      const restaurantList = Array.isArray(data)
-        ? data
-        : listFrom(data, ['restaurants', 'data', 'results']);
-
-      setRestaurants(restaurantList);
-      sessionStorage.setItem('selectedState', state);
-      sessionStorage.setItem('selectedCity', city);
-      sessionStorage.setItem(
-        'searchRestaurants',
-        JSON.stringify(restaurantList)
-      );
-    } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.');
-    } finally {
-      setSearching(false);
-    }
+  function handleDislike() {
+    setShowComment(true);
+    setShowRating(false);
+    onFeedback(message.id, { type: 'dislike', rating: 0, comment: '' });
   }
 
-  function handleBook(restaurant, index) {
-    const id = restaurantIdOf(restaurant, index);
+  function saveRating(value) {
+    setRating(value);
+    onFeedback(message.id, { type: 'like', rating: value, comment: '' });
+  }
 
-    sessionStorage.setItem('selectedRestaurant', JSON.stringify(restaurant));
-
-    navigate(`/booking/${encodeURIComponent(id)}`, {
-      state: { restaurant, state, city },
+  function saveComment() {
+    onFeedback(message.id, {
+      type: 'dislike',
+      rating: 0,
+      comment,
     });
   }
 
   return (
-    <main>
-      <section className="hero-section">
-        <div className="hero-content">
-          <span className="eyebrow">GOOD FOOD. GREAT MOMENTS.</span>
-          <h1>Find your table.<br />Make it memorable.</h1>
-          <p>
-            Discover restaurants around you and reserve your perfect dining
-            experience in just a few clicks.
-          </p>
-        </div>
-      </section>
+    <div className="message-feedback">
+      <div className="message-feedback-actions">
+        <button
+          type="button"
+          aria-label="Like response"
+          title="Helpful"
+          className={feedback?.type === 'like' ? 'feedback-active' : ''}
+          onClick={handleLike}
+        >
+          <ThumbsUp size={15} />
+        </button>
+        <button
+          type="button"
+          aria-label="Dislike response"
+          title="Not helpful"
+          className={feedback?.type === 'dislike' ? 'feedback-active' : ''}
+          onClick={handleDislike}
+        >
+          <ThumbsDown size={15} />
+        </button>
+      </div>
 
-      <section className="search-section">
-        <div className="search-panel">
-          <div className="search-panel-heading">
-            <div>
-              <span className="section-kicker">EXPLORE RESTAURANTS</span>
-              <h2>Where would you like to dine?</h2>
-            </div>
-            <span className="search-icon">⌕</span>
+      {showRating && (
+        <div className="inline-feedback">
+          <p>How helpful was this recommendation?</p>
+          <div className="inline-stars">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                type="button"
+                key={value}
+                aria-label={`Rate ${value} stars`}
+                onClick={() => saveRating(value)}
+                className={value <= rating ? 'star-selected' : ''}
+              >
+                <Star size={19} fill={value <= rating ? 'currentColor' : 'none'} />
+              </button>
+            ))}
           </div>
-
-          <form className="location-form" onSubmit={handleSearch}>
-            <LocationDropdown
-              id="state"
-              label="State"
-              value={state}
-              options={states}
-              placeholder="Select a state"
-              loading={loadingStates}
-              onChange={handleStateChange}
-            />
-
-            <LocationDropdown
-              id="city"
-              label="City"
-              value={city}
-              options={cities}
-              placeholder="Select a city"
-              disabled={!state}
-              loading={loadingCities}
-              onChange={(value) => {
-                setCity(value);
-                setError('');
-              }}
-            />
-
-            <button
-              id="searchBtn"
-              type="submit"
-              className="primary-button search-button"
-              disabled={searching}
-            >
-              {searching ? 'Searching...' : 'Search'}
-            </button>
-          </form>
-
-          {error && <p className="error-message">{error}</p>}
+          {rating > 0 && <span className="feedback-saved">Rating saved</span>}
         </div>
-      </section>
+      )}
 
-      <section className="results-section">
-        {searched && !searching && (
-          <>
-            <div className="results-heading">
-              <div>
-                <span className="section-kicker">YOUR OPTIONS</span>
-                <h1>
-                  {restaurants.length} restaurants available in {city}
-                </h1>
-              </div>
-            </div>
-
-            {restaurants.length > 0 ? (
-              <div className="restaurant-grid">
-                {restaurants.map((restaurant, index) => (
-                  <RestaurantCard
-                    key={restaurantIdOf(restaurant, index)}
-                    restaurant={restaurant}
-                    index={index}
-                    onBook={handleBook}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <span>🍽️</span>
-                <h3>No restaurants found</h3>
-                <p>Try selecting another location.</p>
-              </div>
-            )}
-          </>
-        )}
-
-        {searching && (
-          <div className="loading-state">
-            <span className="loading-spinner" />
-            <p>Finding the best restaurants for you...</p>
-          </div>
-        )}
-      </section>
-    </main>
+      {showComment && (
+        <div className="inline-feedback">
+          <p>How could this recommendation be improved?</p>
+          <textarea
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            placeholder="Tell us what went wrong..."
+            rows={2}
+          />
+          <button
+            type="button"
+            className="small-submit-button"
+            onClick={saveComment}
+          >
+            Submit feedback
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
-
-function BookingPage({ onConfirm }) {
-  const { restaurantId } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const [restaurant, setRestaurant] = useState(
-    location.state?.restaurant || null
-  );
-
-  const [selectedDate, setSelectedDate] = useState('Today');
-  const [selectedTime, setSelectedTime] = useState('');
-  const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
-  const [guestPhone, setGuestPhone] = useState('');
-  const [bookingError, setBookingError] = useState('');
-
-  useEffect(() => {
-    if (restaurant) return;
-
-    try {
-      const savedRestaurant = JSON.parse(
-        sessionStorage.getItem('selectedRestaurant') || 'null'
-      );
-
-      if (savedRestaurant) {
-        setRestaurant(savedRestaurant);
-      }
-    } catch {
-      setRestaurant(null);
-    }
-  }, [restaurantId, restaurant]);
-
-  const dateOptions = [
-    'Today',
-    'Tomorrow',
-    new Date(Date.now() + 2 * 86400000).toLocaleDateString('en-US', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-    }),
-  ];
-
-  function confirmBooking(event) {
-    event.preventDefault();
-
-    if (!selectedTime) {
-      setBookingError('Please select a time slot.');
-      return;
-    }
-
-    if (!guestName.trim() || !guestEmail.trim()) {
-      setBookingError('Please enter your name and email.');
-      return;
-    }
-
-    const booking = {
-      restaurantName: nameOf(restaurant || {}),
-      rating: restaurant?.rating || 0,
-      address:
-        restaurant?.address ||
-        restaurant?.location ||
-        'Address not provided',
-      city: location.state?.city || sessionStorage.getItem('selectedCity') || '',
-      state:
-        location.state?.state ||
-        sessionStorage.getItem('selectedState') ||
-        '',
-      bookingDate: new Date().toISOString(),
-      bookingTime: selectedTime,
-      bookingEmail: guestEmail,
-      guestName,
-      guestPhone,
-      restaurantId,
-      selectedDate,
-    };
-
-    onConfirm(booking);
-    navigate('/my-bookings');
-  }
-
-  if (!restaurant) {
-    return (
-      <main className="page-container">
-        <div className="empty-state">
-          <h2>Restaurant details not found</h2>
-          <p>Please return to the search page and choose a restaurant.</p>
-          <Link to="/" className="primary-button inline-button">
-            Find Restaurants
-          </Link>
-        </div>
-      </main>
-    );
-  }
+function ChatMessage({ message, onFeedback, feedback }) {
+  const isBot = message.role === 'assistant';
 
   return (
-    <main className="booking-page page-container">
-      <div className="page-heading">
-        <span className="section-kicker">COMPLETE YOUR RESERVATION</span>
-        <h1>Book your table</h1>
-        <p>Choose your date and preferred dining time.</p>
-      </div>
+    <div className={`message-row ${isBot ? 'bot-row' : 'user-row'}`}>
+      {isBot && (
+        <div className="message-avatar">
+          <Bot size={19} />
+        </div>
+      )}
 
-      <div className="booking-layout">
-        <section className="booking-main-card">
-          <div className="booking-restaurant">
-            <div className="booking-restaurant-icon">🍽️</div>
-            <div>
-              <h2>{nameOf(restaurant)}</h2>
-              <p>
-                {restaurant.address ||
-                  restaurant.location ||
-                  'Restaurant reservation'}
-              </p>
-            </div>
-          </div>
+      <div className={`message-content ${isBot ? 'bot-message' : 'user-message'}`}>
+        <div className="message-bubble">
+          {message.content}
 
-          <div className="booking-divider" />
-
-          {/* DATE OPTIONS */}
-          <section className="date-selection">
-            <h2>Select a date</h2>
-
-            <div className="date-options">
-              {dateOptions.map((date) => (
-                <button
-                  type="button"
-                  key={date}
-                  className={`date-option ${
-                    selectedDate === date ? 'selected' : ''
-                  }`}
-                  onClick={() => setSelectedDate(date)}
-                >
-                  <p>{date}</p>
-                </button>
+          {message.products?.length > 0 && (
+            <div className="recommendation-list">
+              {message.products.map((product) => (
+                <ProductCard key={product.name} product={product} />
               ))}
             </div>
-          </section>
+          )}
+        </div>
 
-          <div className="booking-divider" />
-
-          {/* TIME SLOTS */}
-          <section className="time-selection">
-            <h2>Choose a time</h2>
-
-            {Object.entries(TIME_SLOTS).map(([period, slots]) => (
-              <div className="time-period" key={period}>
-                <p>{period}</p>
-
-                <div className="time-slots">
-                  {slots.map((slot) => (
-                    <button
-                      type="button"
-                      key={slot}
-                      className={`time-slot ${
-                        selectedTime === slot ? 'selected' : ''
-                      }`}
-                      onClick={() => {
-                        setSelectedTime(slot);
-                        setBookingError('');
-                      }}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </section>
-        </section>
-
-        <aside className="booking-details-card">
-          <h2>Your details</h2>
-
-          <form onSubmit={confirmBooking}>
-            <label htmlFor="guestName">Full name</label>
-            <input
-              id="guestName"
-              type="text"
-              value={guestName}
-              onChange={(event) => setGuestName(event.target.value)}
-              placeholder="Enter your name"
-              required
+        <div className="message-meta">
+          <span>
+            {new Date(message.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+          {isBot && (
+            <MessageFeedback
+              message={message}
+              onFeedback={onFeedback}
+              feedback={feedback}
             />
-
-            <label htmlFor="guestEmail">Email address</label>
-            <input
-              id="guestEmail"
-              type="email"
-              value={guestEmail}
-              onChange={(event) => setGuestEmail(event.target.value)}
-              placeholder="Enter your email"
-              required
-            />
-
-            <label htmlFor="guestPhone">Phone number</label>
-            <input
-              id="guestPhone"
-              type="tel"
-              value={guestPhone}
-              onChange={(event) => setGuestPhone(event.target.value)}
-              placeholder="Enter your phone number"
-            />
-
-            {bookingError && (
-              <p className="error-message">{bookingError}</p>
-            )}
-
-            <button type="submit" className="primary-button confirm-button">
-              Confirm Reservation
-            </button>
-          </form>
-
-          <p className="booking-note">
-            No payment required to reserve your table.
-          </p>
-        </aside>
+          )}
+        </div>
       </div>
-    </main>
+
+      {!isBot && <div className="user-avatar">You</div>}
+    </div>
   );
 }
 
+function FeedbackModal({ onClose, onSubmit, initialRating = 0 }) {
+  const [rating, setRating] = useState(initialRating);
+  const [comment, setComment] = useState('');
 
-function MyBookings({ bookings }) {
+  function submit(event) {
+    event.preventDefault();
+    onSubmit({ rating, comment });
+  }
+
   return (
-    <main className="my-bookings-page page-container">
-      <div className="page-heading">
-        <span className="section-kicker">YOUR DINING PLANS</span>
-        <h1>My Bookings</h1>
-        <p>All your upcoming reservations in one place.</p>
+    <div className="modal-backdrop" onClick={onClose}>
+      <form
+        className="feedback-modal"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <button
+          type="button"
+          className="modal-close"
+          onClick={onClose}
+          aria-label="Close feedback"
+        >
+          <X size={20} />
+        </button>
+
+        <div className="modal-icon">
+          <Sparkles size={25} />
+        </div>
+
+        <h2>We value your feedback!</h2>
+        <p>How would you rate your experience with Product Recommendation AI?</p>
+
+        <div className="modal-stars">
+          {[1, 2, 3, 4, 5].map((value) => (
+            <button
+              type="button"
+              key={value}
+              aria-label={`Rate ${value} stars`}
+              onClick={() => setRating(value)}
+              className={value <= rating ? 'star-selected' : ''}
+            >
+              <Star size={30} fill={value <= rating ? 'currentColor' : 'none'} />
+            </button>
+          ))}
+        </div>
+
+        <label htmlFor="finalFeedback">Tell us more (optional)</label>
+        <textarea
+          id="finalFeedback"
+          rows={4}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          placeholder="Share your experience or suggestions..."
+        />
+
+        <button type="submit" className="primary-action" disabled={rating === 0}>
+          Submit Feedback
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function HistoryPage({ conversations, onDelete, theme }) {
+  const [filter, setFilter] = useState('all');
+
+  const filtered = useMemo(() => {
+    if (filter === 'all') return conversations;
+
+    if (filter === 'unrated') {
+      return conversations.filter((item) => !item.rating);
+    }
+
+    return conversations.filter((item) => item.rating === Number(filter));
+  }, [conversations, filter]);
+
+  return (
+    <main className="history-page">
+      <div className="history-heading">
+        <Link to="/" className="back-link">
+          <ArrowLeft size={17} /> Back to Chat
+        </Link>
+        <span className="section-eyebrow">YOUR ACTIVITY</span>
+        <h1>Conversation History</h1>
+        <p>Review your previous product recommendations and feedback.</p>
       </div>
 
-      {bookings.length === 0 ? (
-        <div className="empty-state">
-          <span>📅</span>
-          <h2>No bookings yet</h2>
-          <p>Your confirmed restaurant reservations will appear here.</p>
-          <Link to="/" className="primary-button inline-button">
-            Explore Restaurants
+      <div className="history-toolbar">
+        <div>
+          <h2>Previous Recommendations</h2>
+          <span>{filtered.length} conversations</span>
+        </div>
+
+        <select
+          aria-label="Filter conversations by rating"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+        >
+          <option value="all">All ratings</option>
+          <option value="5">5 stars</option>
+          <option value="4">4 stars</option>
+          <option value="3">3 stars</option>
+          <option value="2">2 stars</option>
+          <option value="1">1 star</option>
+          <option value="unrated">Not rated</option>
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="history-empty">
+          <History size={38} />
+          <h3>No conversations found</h3>
+          <p>Start a chat to see your recommendations here.</p>
+          <Link to="/" className="primary-action">
+            Start a conversation
           </Link>
         </div>
       ) : (
-        <div className="bookings-list">
-          {bookings.map((booking, index) => (
-            <article className="booking-card" key={`${booking.restaurantName}-${index}`}>
-              <div className="booking-card-icon">🍽️</div>
-
-              <div className="booking-card-content">
-                <span className="booking-status">TABLE RESERVED</span>
-                <h3>{booking.restaurantName}</h3>
-                <p>{booking.address}</p>
-                <p>
-                  {booking.city}
-                  {booking.state ? `, ${booking.state}` : ''}
-                </p>
-                <div className="booking-meta">
-                  {booking.bookingDate && (
-                    <span>
-                      📅 {new Date(booking.bookingDate).toLocaleDateString()}
-                    </span>
-                  )}
-                  {booking.bookingTime && (
-                    <span>🕒 {booking.bookingTime}</span>
-                  )}
-                  {booking.bookingEmail && (
-                    <span>✉️ {booking.bookingEmail}</span>
-                  )}
+        <div className="history-list">
+          {filtered.map((conversation) => (
+            <article className="history-card" key={conversation.id}>
+              <div className="history-card-top">
+                <div className="history-card-icon">
+                  <MessageCircle size={20} />
                 </div>
+                <div className="history-card-info">
+                  <h3>
+                    {conversation.title || 'Product recommendation conversation'}
+                  </h3>
+                  <span>
+                    {new Date(conversation.updatedAt).toLocaleString()}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="delete-conversation"
+                  aria-label="Delete conversation"
+                  onClick={() => onDelete(conversation.id)}
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
+
+              <p className="history-preview">
+                {conversation.messages
+                  ?.filter((message) => message.role === 'user')
+                  .map((message) => message.content)
+                  .join(' · ') || 'No user messages'}
+              </p>
+
+              <div className="history-card-bottom">
+                <span className="history-rating">
+                  {conversation.rating ? (
+                    <>
+                      <Star size={15} fill="currentColor" />
+                      {conversation.rating}/5
+                    </>
+                  ) : (
+                    'Not rated'
+                  )}
+                </span>
+                <span>{conversation.messages?.length || 0} messages</span>
               </div>
             </article>
           ))}
@@ -781,43 +417,374 @@ function MyBookings({ bookings }) {
   );
 }
 
-function AppShell() {
-  const [bookings, setBookings] = useState(readBookings);
+function ChatPage({
+  conversations,
+  setConversations,
+  feedbacks,
+  setFeedbacks,
+  theme,
+  setTheme,
+}) {
+  const navigate = useNavigate();
+  const [messages, setMessages] = useState(createInitialMessages);
+  const [input, setInput] = useState('');
+  const [isBudgetPending, setIsBudgetPending] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const bottomRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem(BOOKING_KEY, JSON.stringify(bookings));
-  }, [bookings]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-  function addBooking(booking) {
-    setBookings((current) => [...current, booking]);
+  function appendMessage(message) {
+    setMessages((previous) => [...previous, message]);
+  }
+
+  function handleBotFeedback(messageId, feedback) {
+    setFeedbacks((previous) => ({
+      ...previous,
+      [messageId]: feedback,
+    }));
+  }
+
+  function handleAsk(event) {
+    event.preventDefault();
+
+    const query = input.trim();
+    if (!query) return;
+
+    appendMessage(createMessage('user', query));
+    setInput('');
+
+    if (isBudgetPending && pendingProduct) {
+      const budget = parseBudget(query);
+
+      if (!budget) {
+        appendMessage(
+          createMessage(
+            'assistant',
+            'Please provide a valid budget range with two numbers, such as 20000-40000.'
+          )
+        );
+        return;
+      }
+
+      const matches = pendingProduct.recommendations.filter(
+        (product) => product.price >= budget.min && product.price <= budget.max
+      );
+
+      if (matches.length === 0) {
+        appendMessage(
+          createMessage(
+            'assistant',
+            `I couldn't find ${pendingProduct.name.toLowerCase()} recommendations between ${formatPrice(budget.min)} and ${formatPrice(budget.max)}. Please try another budget range.`
+          )
+        );
+      } else {
+        appendMessage(
+          createMessage(
+            'assistant',
+            `Here are my ${pendingProduct.name.toLowerCase()} recommendations between ${formatPrice(budget.min)} and ${formatPrice(budget.max)}:`,
+            { products: matches }
+          )
+        );
+      }
+
+      setIsBudgetPending(false);
+      setPendingProduct(null);
+      return;
+    }
+
+    const product = getProduct(query);
+
+    if (!product) {
+      appendMessage(
+        createMessage('assistant', responseData.fallback)
+      );
+      return;
+    }
+
+    setPendingProduct(product);
+    setIsBudgetPending(true);
+
+    appendMessage(
+      createMessage('assistant', product.prompt)
+    );
+  }
+
+  function saveConversation(currentMessages = messages, rating = null, comment = '') {
+    const userMessages = currentMessages.filter(
+      (message) => message.role === 'user'
+    );
+
+    if (userMessages.length === 0) return;
+
+    const conversation = {
+      id: createId(),
+      title: userMessages[0]?.content || 'Product recommendation',
+      messages: currentMessages,
+      rating,
+      comment,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setConversations((previous) => [conversation, ...previous]);
+    return conversation;
+  }
+
+  function handleSave(event) {
+    event.preventDefault();
+
+    saveConversation();
+    setSaved(true);
+  }
+
+  function handleNewSuggestion() {
+    saveConversation();
+    setMessages(createInitialMessages());
+    setInput('');
+    setIsBudgetPending(false);
+    setPendingProduct(null);
+    setSaved(false);
+    setShowFeedback(false);
+  }
+
+  function handleFinalFeedback(data) {
+    saveConversation(messages, data.rating, data.comment);
+    setShowFeedback(false);
+    handleNewSuggestion();
   }
 
   return (
-    <div className="app">
-      <Header />
+    <div className="app-layout">
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="brand-mark"><Sparkles size={22} /></div>
+          <span>Product<span>AI</span></span>
+          <button
+            type="button"
+            className="mobile-close"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <X size={20} />
+          </button>
+        </div>
 
-      <Routes>
-        <Route path="/" element={<SearchPage />} />
-        <Route
-          path="/booking/:restaurantId"
-          element={<BookingPage onConfirm={addBooking} />}
-        />
-        <Route
-          path="/my-bookings"
-          element={<MyBookings bookings={bookings} />}
-        />
-        <Route path="*" element={<SearchPage />} />
-      </Routes>
+        <button
+          type="button"
+          className="new-chat-button"
+          onClick={handleNewSuggestion}
+        >
+          <Plus size={18} /> New conversation
+        </button>
 
-      <Footer />
+        <Link
+          to="/history"
+          className="sidebar-link"
+          onClick={() => setSidebarOpen(false)}
+        >
+          <History size={18} /> Previous Recommendations
+        </Link>
+
+        <div className="sidebar-bottom">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          >
+            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            {theme === 'light' ? 'Dark mode' : 'Light mode'}
+          </button>
+          <div className="sidebar-user">
+            <div className="sidebar-user-avatar">U</div>
+            <div>
+              <strong>Guest User</strong>
+              <span>Product explorer</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="sidebar-overlay"
+          aria-label="Close menu"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <main className="chat-main">
+        <header className="chat-header">
+          <button
+            type="button"
+            className="mobile-menu"
+            aria-label="Open menu"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu size={22} />
+          </button>
+
+          <div className="chat-header-title">
+            <div className="header-bot-icon"><Bot size={19} /></div>
+            <div>
+              <strong>Product Recommendation AI</strong>
+              <span><i /> Online and ready to help</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="header-theme-toggle"
+            aria-label="Toggle theme"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          >
+            {theme === 'light' ? <Moon size={19} /> : <Sun size={19} />}
+          </button>
+        </header>
+
+        <section className="chat-scroll-area">
+          <div className="chat-welcome">
+            <div className="welcome-icon"><Sparkles size={25} /></div>
+            <h1>Product Recommendation AI</h1>
+            <p>
+              Your personal shopping assistant. Tell me what you're looking
+              for, and I'll help you find the right product.
+            </p>
+            <div className="suggestion-chips">
+              {['I need a laptop', 'Suggest a mobile phone', 'I want headphones'].map(
+                (suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion}
+                    onClick={() => setInput(suggestion)}
+                  >
+                    {suggestion}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          <div className="messages-list">
+            {messages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                message={message}
+                onFeedback={handleBotFeedback}
+                feedback={feedbacks[message.id]}
+              />
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        </section>
+
+        <footer className="chat-composer-area">
+          <form className="chat-composer" onSubmit={handleAsk}>
+            <input
+              type="text"
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Please tell me about your query!"
+              aria-label="Chat message"
+            />
+            <button type="submit" className="ask-button" aria-label="Ask">
+              <Send size={18} />
+              <span>Ask</span>
+            </button>
+          </form>
+
+          <div className="composer-actions">
+            <button type="button" onClick={handleSave}>
+              <Save size={16} /> Save Conversation
+            </button>
+            <button type="button" onClick={() => setShowFeedback(true)}>
+              <Star size={16} /> Rate this conversation
+            </button>
+            <button type="button" onClick={handleNewSuggestion}>
+              <Plus size={16} /> Want new suggestion?
+            </button>
+          </div>
+
+          {saved && (
+            <p className="save-confirmation">Conversation saved successfully!</p>
+          )}
+          <p className="composer-disclaimer">
+            AI recommendations are suggestions. Please verify product details before purchasing.
+          </p>
+        </footer>
+      </main>
+
+      {showFeedback && (
+        <FeedbackModal
+          onClose={() => setShowFeedback(false)}
+          onSubmit={handleFinalFeedback}
+        />
+      )}
     </div>
   );
 }
 
 export default function App() {
+  const [conversations, setConversations] = useState(() =>
+    readStorage(CHAT_KEY, [])
+  );
+
+  const [feedbacks, setFeedbacks] = useState(() =>
+    readStorage(FEEDBACK_KEY, {})
+  );
+
+  const [theme, setTheme] = useState(() =>
+    localStorage.getItem(THEME_KEY) || 'light'
+  );
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_KEY, JSON.stringify(conversations));
+  }, [conversations]);
+
+  useEffect(() => {
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(feedbacks));
+  }, [feedbacks]);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, theme);
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  function deleteConversation(id) {
+    setConversations((previous) =>
+      previous.filter((conversation) => conversation.id !== id)
+    );
+  }
+
   return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <ChatPage
+            conversations={conversations}
+            setConversations={setConversations}
+            feedbacks={feedbacks}
+            setFeedbacks={setFeedbacks}
+            theme={theme}
+            setTheme={setTheme}
+          />
+        }
+      />
+      <Route
+        path="/history"
+        element={
+          <HistoryPage
+            conversations={conversations}
+            onDelete={deleteConversation}
+            theme={theme}
+          />
+        }
+      />
+    </Routes>
   );
 }
