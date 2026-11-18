@@ -1,6 +1,12 @@
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, Route, Routes, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import {
+  Link,
+  Route,
+  Routes,
+  useNavigate
+} from 'react-router-dom';
+
 import {
   Bot,
   MessageCircle,
@@ -13,12 +19,9 @@ import {
   ThumbsUp,
   ThumbsDown,
   Star,
-  Menu,
-  X,
-  ShoppingBag,
-  Sparkles,
-  ArrowLeft,
   Trash2,
+  ArrowLeft,
+  ShoppingBag
 } from 'lucide-react';
 
 import responseData from './data/responses.json';
@@ -30,558 +33,195 @@ const FEEDBACK_KEY = 'product-ai-feedback';
 const BUDGET_PROMPT =
   'Please select your budget (500 - 1000, 1000 - 1500, 1500 - 2000)';
 
-function readStorage(key, fallback) {
+const FALLBACK_MESSAGE =
+  'Sorry, I did not understand your query!';
+
+const getStoredData = (key, fallback = []) => {
   try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallback;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
   } catch {
     return fallback;
   }
-}
+};
 
-function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
+const createInitialMessages = () => [
+  {
+    id: Date.now(),
+    sender: 'bot',
+    text:
+      responseData.greeting ||
+      'Hello! Welcome to Product Recommendation AI. What product are you looking for?'
+  }
+];
 
-function createMessage(role, content, extra = {}) {
-  return {
-    id: createId(),
-    role,
-    content,
-    timestamp: new Date().toISOString(),
-    ...extra,
-  };
-}
+const getProduct = (query) => {
+  const products = responseData.products || [];
+  const normalizedQuery = query.toLowerCase().trim();
 
-function getProduct(query) {
-  const normalized = query.toLowerCase();
+  return products.find((product) => {
+    const keywords = product.keywords || [];
 
-  return responseData.products.find((product) =>
-    product.keywords.some((keyword) =>
-      normalized.includes(keyword.toLowerCase())
-    )
-  );
-}
+    return (
+      keywords.some((keyword) =>
+        normalizedQuery.includes(String(keyword).toLowerCase())
+      ) ||
+      String(product.name || product.category || '')
+        .toLowerCase()
+        .includes(normalizedQuery)
+    );
+  });
+};
 
-function parseBudget(text) {
-  const numbers = text.match(/[\d,]+(?:\.\d+)?/g);
+const parseBudget = (value) => {
+  const numbers = value.match(/\d+/g);
 
   if (!numbers || numbers.length < 2) {
     return null;
   }
 
-  const min = Number(numbers[0].replace(/,/g, ''));
-  const max = Number(numbers[1].replace(/,/g, ''));
+  return {
+    min: Number(numbers[0]),
+    max: Number(numbers[1])
+  };
+};
+
+const getPrice = (product) => {
+  const rawPrice = product.price ?? product.cost ?? 0;
+  return Number(String(rawPrice).replace(/[^\d.]/g, '')) || 0;
+};
+
+function ChatPage() {
+  const navigate = useNavigate();
 
-  if (
-    !Number.isFinite(min) ||
-    !Number.isFinite(max) ||
-    min < 0 ||
-    max < min
-  ) {
-    return null;
-  }
-
-  return { min, max };
-}
-
-function formatPrice(price) {
-  return `₹${Number(price).toLocaleString('en-IN')}`;
-}
-
-function getGreeting() {
-  return responseData.greetings[0];
-}
-
-function createInitialMessages() {
-  return [createMessage('assistant', getGreeting())];
-}
-
-function ProductCard({ product }) {
-  return (
-    <div className="product-card">
-      <div className="product-card-icon">
-        <ShoppingBag size={21} />
-      </div>
-
-      <div className="product-card-info">
-        <h4>{product.name}</h4>
-        <p>{product.description}</p>
-        <strong>{formatPrice(product.price)}</strong>
-      </div>
-    </div>
-  );
-}
-
-function MessageFeedback({ message, onFeedback, feedback }) {
-  const [rating, setRating] = useState(feedback?.rating || 0);
-  const [comment, setComment] = useState(feedback?.comment || '');
-  const [showRating, setShowRating] = useState(
-    feedback?.type === 'like'
-  );
-  const [showComment, setShowComment] = useState(
-    feedback?.type === 'dislike'
-  );
-
-  function handleLike() {
-    setShowRating(true);
-    setShowComment(false);
-
-    onFeedback(message.id, {
-      type: 'like',
-      rating: 0,
-      comment: '',
-    });
-  }
-
-  function handleDislike() {
-    setShowComment(true);
-    setShowRating(false);
-
-    onFeedback(message.id, {
-      type: 'dislike',
-      rating: 0,
-      comment: '',
-    });
-  }
-
-  function saveRating(value) {
-    setRating(value);
-
-    onFeedback(message.id, {
-      type: 'like',
-      rating: value,
-      comment: '',
-    });
-  }
-
-  function saveComment() {
-    onFeedback(message.id, {
-      type: 'dislike',
-      rating: 0,
-      comment,
-    });
-  }
-
-  return (
-    <div className="message-feedback">
-      <div className="message-feedback-actions">
-        <button
-          type="button"
-          aria-label="Like response"
-          title="Helpful"
-          className={feedback?.type === 'like' ? 'feedback-active' : ''}
-          onClick={handleLike}
-        >
-          <ThumbsUp size={15} />
-        </button>
-
-        <button
-          type="button"
-          aria-label="Dislike response"
-          title="Not helpful"
-          className={
-            feedback?.type === 'dislike' ? 'feedback-active' : ''
-          }
-          onClick={handleDislike}
-        >
-          <ThumbsDown size={15} />
-        </button>
-      </div>
-
-      {showRating && (
-        <div className="inline-feedback">
-          <p>How helpful was this recommendation?</p>
-
-          <div className="inline-stars">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                type="button"
-                key={value}
-                aria-label={`Rate ${value} stars`}
-                onClick={() => saveRating(value)}
-                className={value <= rating ? 'star-selected' : ''}
-              >
-                <Star
-                  size={19}
-                  fill={value <= rating ? 'currentColor' : 'none'}
-                />
-              </button>
-            ))}
-          </div>
-
-          {rating > 0 && (
-            <span className="feedback-saved">Rating saved</span>
-          )}
-        </div>
-      )}
-
-      {showComment && (
-        <div className="inline-feedback">
-          <p>How could this recommendation be improved?</p>
-
-          <textarea
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            placeholder="Tell us what went wrong..."
-            rows={2}
-          />
-
-          <button
-            type="button"
-            className="small-submit-button"
-            onClick={saveComment}
-          >
-            Submit feedback
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChatMessage({ message, onFeedback, feedback }) {
-  const isBot = message.role === 'assistant';
-
-  return (
-    <div className={`message-row ${isBot ? 'bot-row' : 'user-row'}`}>
-      {isBot && (
-        <div className="message-avatar">
-          <Bot size={19} />
-        </div>
-      )}
-
-      <div
-        className={`message-content ${
-          isBot ? 'bot-message' : 'user-message'
-        }`}
-      >
-        <div className="message-bubble">
-          {message.content}
-
-          {message.products?.length > 0 && (
-            <div className="recommendation-list">
-              {message.products.map((product) => (
-                <ProductCard key={product.name} product={product} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="message-meta">
-          <span>
-            {new Date(message.timestamp).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </span>
-
-          {isBot && (
-            <MessageFeedback
-              message={message}
-              onFeedback={onFeedback}
-              feedback={feedback}
-            />
-          )}
-        </div>
-      </div>
-
-      {!isBot && <div className="user-avatar">You</div>}
-    </div>
-  );
-}
-
-function FeedbackModal({ onClose, onSubmit, initialRating = 0 }) {
-  const [rating, setRating] = useState(initialRating);
-  const [comment, setComment] = useState('');
-
-  function submit(event) {
-    event.preventDefault();
-
-    if (rating === 0) return;
-
-    onSubmit({ rating, comment });
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <form
-        className="feedback-modal"
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <button
-          type="button"
-          className="modal-close"
-          onClick={onClose}
-          aria-label="Close feedback"
-        >
-          <X size={20} />
-        </button>
-
-        <div className="modal-icon">
-          <Sparkles size={25} />
-        </div>
-
-        <h2>We value your feedback!</h2>
-
-        <p>
-          How would you rate your experience with Product Recommendation AI?
-        </p>
-
-        <div className="modal-stars">
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              type="button"
-              key={value}
-              aria-label={`Rate ${value} stars`}
-              onClick={() => setRating(value)}
-              className={value <= rating ? 'star-selected' : ''}
-            >
-              <Star
-                size={30}
-                fill={value <= rating ? 'currentColor' : 'none'}
-              />
-            </button>
-          ))}
-        </div>
-
-        <label htmlFor="finalFeedback">
-          Tell us more (optional)
-        </label>
-
-        <textarea
-          id="finalFeedback"
-          rows={4}
-          value={comment}
-          onChange={(event) => setComment(event.target.value)}
-          placeholder="Share your experience or suggestions..."
-        />
-
-        <button
-          type="submit"
-          className="primary-action"
-          disabled={rating === 0}
-        >
-          Submit Feedback
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function HistoryPage({ conversations, onDelete }) {
-  const [filter, setFilter] = useState('all');
-
-  const filtered = useMemo(() => {
-    if (filter === 'all') {
-      return conversations;
-    }
-
-    if (filter === 'unrated') {
-      return conversations.filter((item) => !item.rating);
-    }
-
-    return conversations.filter(
-      (item) => item.rating === Number(filter)
-    );
-  }, [conversations, filter]);
-
-  return (
-    <main className="history-page">
-      <div className="history-heading">
-        <Link to="/" className="back-link">
-          <ArrowLeft size={17} />
-          Back to Chat
-        </Link>
-
-        <span className="section-eyebrow">YOUR ACTIVITY</span>
-
-        <h1>Conversation History</h1>
-
-        <p>
-          Review your previous product recommendations and feedback.
-        </p>
-      </div>
-
-      <div className="history-toolbar">
-        <div>
-          <h2>Previous Suggestions</h2>
-          <span>{filtered.length} conversations</span>
-        </div>
-
-        <div className="history-toolbar-actions">
-          <Link to="/" className="primary-action">
-            <Plus size={16} />
-            New suggestion
-          </Link>
-
-          <select
-            aria-label="Filter conversations by rating"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-          >
-            <option value="all">All ratings</option>
-            <option value="5">5 stars</option>
-            <option value="4">4 stars</option>
-            <option value="3">3 stars</option>
-            <option value="2">2 stars</option>
-            <option value="1">1 star</option>
-            <option value="unrated">Not rated</option>
-          </select>
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="history-empty">
-          <History size={38} />
-
-          <h3>No conversations found</h3>
-
-          <p>Start a chat to see your recommendations here.</p>
-
-          <Link to="/" className="primary-action">
-            Start a conversation
-          </Link>
-        </div>
-      ) : (
-        <div className="history-list">
-          {filtered.map((conversation) => (
-            <article className="history-card" key={conversation.id}>
-              <div className="history-card-top">
-                <div className="history-card-icon">
-                  <MessageCircle size={20} />
-                </div>
-
-                <div className="history-card-info">
-                  <h3>
-                    {conversation.title ||
-                      'Product recommendation conversation'}
-                  </h3>
-
-                  <span>
-                    {new Date(conversation.updatedAt).toLocaleString()}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  className="delete-conversation"
-                  aria-label="Delete conversation"
-                  onClick={() => onDelete(conversation.id)}
-                >
-                  <Trash2 size={17} />
-                </button>
-              </div>
-
-              <p className="history-preview">
-                {conversation.messages
-                  ?.filter((message) => message.role === 'user')
-                  .map((message) => message.content)
-                  .join(' · ') || 'No user messages'}
-              </p>
-
-              <div className="history-card-bottom">
-                <span className="history-rating">
-                  {conversation.rating ? (
-                    <>
-                      <Star size={15} fill="currentColor" />
-                      {conversation.rating}/5
-                    </>
-                  ) : (
-                    'Not rated'
-                  )}
-                </span>
-
-                <span>
-                  {conversation.messages?.length || 0} messages
-                </span>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </main>
-  );
-}
-
-function ChatPage({
-  conversations,
-  setConversations,
-  feedbacks,
-  setFeedbacks,
-  theme,
-  setTheme,
-}) {
   const [messages, setMessages] = useState(createInitialMessages);
   const [input, setInput] = useState('');
-  const [isBudgetPending, setIsBudgetPending] = useState(false);
   const [pendingProduct, setPendingProduct] = useState(null);
-  const [showFeedback, setShowFeedback] = useState(false);
+  const [isBudgetPending, setIsBudgetPending] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const bottomRef = useRef(null);
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem(THEME_KEY) || 'light'
+  );
+
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState('');
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
-  function appendMessage(message) {
-    setMessages((previous) => [...previous, message]);
-  }
+  const addMessage = (sender, text, extra = {}) => {
+    const newMessage = {
+      id: Date.now() + Math.random(),
+      sender,
+      text,
+      timestamp: new Date().toISOString(),
+      ...extra
+    };
 
-  function handleBotFeedback(messageId, feedback) {
-    setFeedbacks((previous) => ({
-      ...previous,
-      [messageId]: feedback,
-    }));
-  }
+    setMessages((previous) => [...previous, newMessage]);
+    return newMessage;
+  };
 
-  function handleAsk(event) {
+  const saveConversation = (
+    conversationMessages = messages,
+    conversationRating = rating,
+    comment = feedbackComment
+  ) => {
+    if (!conversationMessages || conversationMessages.length <= 1) {
+      return;
+    }
+
+    const conversations = getStoredData(CHAT_KEY, []);
+
+    const conversation = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      messages: conversationMessages,
+      rating: conversationRating,
+      feedback: comment
+    };
+
+    conversations.push(conversation);
+
+    localStorage.setItem(
+      CHAT_KEY,
+      JSON.stringify(conversations)
+    );
+
+    setSaved(true);
+    return conversation;
+  };
+
+  const handleSave = (event) => {
+    event?.preventDefault();
+    saveConversation();
+  };
+
+  const resetConversation = () => {
+    setMessages(createInitialMessages());
+    setInput('');
+    setPendingProduct(null);
+    setIsBudgetPending(false);
+    setSaved(false);
+    setShowFeedback(false);
+    setRating(0);
+    setFeedbackComment('');
+  };
+
+  const handleNewSuggestion = (event) => {
+    event?.preventDefault();
+
+    if (messages.length > 1 && !saved) {
+      saveConversation();
+    }
+
+    resetConversation();
+    navigate('/');
+  };
+
+  const handleSubmit = (event) => {
     event.preventDefault();
 
-    const query = input.trim();
+    const userQuery = input.trim();
 
-    if (!query) return;
+    if (!userQuery) return;
 
-    appendMessage(createMessage('user', query));
+    addMessage('user', userQuery);
     setInput('');
-    setSaved(false);
 
     if (isBudgetPending && pendingProduct) {
-      const budget = parseBudget(query);
+      const budget = parseBudget(userQuery);
 
       if (!budget) {
-        appendMessage(
-          createMessage(
-            'assistant',
-            'Please provide a valid budget range with two numbers, such as 500-1000.'
-          )
+        addMessage(
+          'bot',
+          'Please enter a valid budget range, for example 500 - 1000.'
         );
         return;
       }
 
-      const matches = pendingProduct.recommendations.filter(
-        (product) =>
-          product.price >= budget.min &&
-          product.price <= budget.max
-      );
+      const recommendations =
+        pendingProduct.recommendations || [];
 
-      if (matches.length === 0) {
-        appendMessage(
-          createMessage(
-            'assistant',
-            `I couldn't find ${pendingProduct.name.toLowerCase()} recommendations between ${formatPrice(budget.min)} and ${formatPrice(budget.max)}. Please try another budget range.`
-          )
+      const filteredProducts = recommendations.filter((product) => {
+        const price = getPrice(product);
+        return price >= budget.min && price <= budget.max;
+      });
+
+      if (filteredProducts.length > 0) {
+        addMessage(
+          'bot',
+          `Here are the products I recommend within your budget of ${budget.min} - ${budget.max}:`,
+          { products: filteredProducts }
         );
       } else {
-        appendMessage(
-          createMessage(
-            'assistant',
-            `Here are my ${pendingProduct.name.toLowerCase()} recommendations between ${formatPrice(budget.min)} and ${formatPrice(budget.max)}:`,
-            { products: matches }
-          )
+        addMessage(
+          'bot',
+          'Sorry, no products were found within your selected budget. Please try another budget range.'
         );
       }
 
@@ -590,187 +230,84 @@ function ChatPage({
       return;
     }
 
-    const product = getProduct(query);
+    const matchedProduct = getProduct(userQuery);
 
-    if (!product) {
-      appendMessage(
-        createMessage('assistant', responseData.fallback)
-      );
+    if (!matchedProduct) {
+      addMessage('bot', FALLBACK_MESSAGE);
       return;
     }
 
-    setPendingProduct(product);
+    setPendingProduct(matchedProduct);
     setIsBudgetPending(true);
+    addMessage('bot', BUDGET_PROMPT);
+  };
 
-    appendMessage(
-      createMessage('assistant', BUDGET_PROMPT)
-    );
-  }
+  const handleMessageFeedback = (messageId, type) => {
+    const feedback = getStoredData(FEEDBACK_KEY, []);
 
-  function saveConversation(
-    currentMessages = messages,
-    rating = null,
-    comment = ''
-  ) {
-    const userMessages = currentMessages.filter(
-      (message) => message.role === 'user'
+    const existingIndex = feedback.findIndex(
+      (item) => item.messageId === messageId
     );
 
-    if (userMessages.length === 0) return;
-
-    const conversation = {
-      id: createId(),
-      title: userMessages[0]?.content || 'Product recommendation',
-      messages: currentMessages,
-      rating,
-      comment,
-      updatedAt: new Date().toISOString(),
+    const newFeedback = {
+      messageId,
+      type,
+      date: new Date().toISOString()
     };
 
-    setConversations((previous) => [
-      conversation,
-      ...previous,
-    ]);
+    if (existingIndex >= 0) {
+      feedback[existingIndex] = newFeedback;
+    } else {
+      feedback.push(newFeedback);
+    }
 
-    return conversation;
-  }
+    localStorage.setItem(
+      FEEDBACK_KEY,
+      JSON.stringify(feedback)
+    );
 
-  function handleSave(event) {
-    event.preventDefault();
+    setMessages((previous) =>
+      previous.map((message) =>
+        message.id === messageId
+          ? { ...message, feedback: type }
+          : message
+      )
+    );
+  };
 
-    saveConversation();
-    setSaved(true);
-  }
-
-  function resetConversation() {
-    setMessages(createInitialMessages());
-    setInput('');
-    setIsBudgetPending(false);
-    setPendingProduct(null);
-    setSaved(false);
-    setShowFeedback(false);
-  }
-
-  function handleNewSuggestion() {
-    saveConversation();
+  const handleFinalFeedback = () => {
+    saveConversation(messages, rating, feedbackComment);
     resetConversation();
-  }
-
-  function handleFinalFeedback(data) {
-    saveConversation(messages, data.rating, data.comment);
-    resetConversation();
-  }
+  };
 
   return (
-    <div className="app-layout">
-      <aside
-        className={`sidebar ${
-          sidebarOpen ? 'sidebar-open' : ''
-        }`}
-      >
-        <div className="sidebar-brand">
-          <div className="brand-mark">
-            <Sparkles size={22} />
+    <div className={`app-container ${theme}`}>
+      <header className="chat-header">
+        <div className="header-left">
+          <div className="header-logo">
+            <Bot size={25} />
           </div>
 
-          <span>
-            Product<span>AI</span>
-          </span>
-
-          <button
-            type="button"
-            className="mobile-close"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <X size={20} />
-          </button>
+          <div className="chat-header-title">
+            <h1>Product Recommendation AI</h1>
+            <p>Your personal shopping assistant</p>
+          </div>
         </div>
 
-        <button
-          type="button"
-          className="new-chat-button"
-          onClick={handleNewSuggestion}
-        >
-          <Plus size={18} />
-          New conversation
-        </button>
+        <div className="header-actions">
+          <Link to="/history" className="history-link">
+            <History size={17} />
+            <span>Past Conversations</span>
+          </Link>
 
-        <Link
-          to="/history"
-          className="sidebar-link"
-          onClick={() => setSidebarOpen(false)}
-        >
-          <History size={18} />
-          Previous Recommendations
-        </Link>
-
-        <div className="sidebar-bottom">
           <button
             type="button"
             className="theme-toggle"
-            onClick={() =>
-              setTheme(theme === 'light' ? 'dark' : 'light')
-            }
-          >
-            {theme === 'light' ? (
-              <Moon size={18} />
-            ) : (
-              <Sun size={18} />
-            )}
-
-            {theme === 'light' ? 'Dark mode' : 'Light mode'}
-          </button>
-
-          <div className="sidebar-user">
-            <div className="sidebar-user-avatar">U</div>
-
-            <div>
-              <strong>Guest User</strong>
-              <span>Product explorer</span>
-            </div>
-          </div>
-        </div>
-      </aside>
-
-      {sidebarOpen && (
-        <button
-          type="button"
-          className="sidebar-overlay"
-          aria-label="Close menu"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <main className="chat-main">
-        <header className="chat-header">
-          <button
-            type="button"
-            className="mobile-menu"
-            aria-label="Open menu"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu size={22} />
-          </button>
-
-          <div className="chat-header-title">
-            <div className="header-bot-icon">
-              <Bot size={19} />
-            </div>
-
-            <div>
-              <h1>Product Recommendation AI</h1>
-              <span>
-                <i /> Online and ready to help
-              </span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="header-theme-toggle"
             aria-label="Toggle theme"
             onClick={() =>
-              setTheme(theme === 'light' ? 'dark' : 'light')
+              setTheme((previous) =>
+                previous === 'light' ? 'dark' : 'light'
+              )
             }
           >
             {theme === 'light' ? (
@@ -779,191 +316,353 @@ function ChatPage({
               <Sun size={19} />
             )}
           </button>
-        </header>
+        </div>
+      </header>
 
-        <section className="chat-scroll-area">
-          <div className="chat-welcome">
-            <div className="welcome-icon">
-              <Sparkles size={25} />
-            </div>
-
-            <h2>Welcome to Product Recommendation AI</h2>
-
-            <p>
-              Your personal shopping assistant. Tell me what you're
-              looking for, and I'll help you find the right product.
-            </p>
-
-            <div className="suggestion-chips">
-              {[
-                'I need a laptop',
-                'Suggest a mobile phone',
-                'I want headphones',
-              ].map((suggestion) => (
-                <button
-                  type="button"
-                  key={suggestion}
-                  onClick={() => setInput(suggestion)}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="messages-list">
+      <main className="chat-main">
+        <section className="chat-window">
+          <div className="chat-messages">
             {messages.map((message) => (
-              <ChatMessage
+              <div
                 key={message.id}
-                message={message}
-                onFeedback={handleBotFeedback}
-                feedback={feedbacks[message.id]}
-              />
+                className={`message-row ${message.sender}`}
+              >
+                {message.sender === 'bot' && (
+                  <div className="message-avatar">
+                    <Bot size={19} />
+                  </div>
+                )}
+
+                <div className="message-content">
+                  <div className="message-bubble">
+                    <p>{message.text}</p>
+
+                    {message.products?.length > 0 && (
+                      <div className="recommended-products">
+                        {message.products.map((product, index) => (
+                          <div
+                            className="product-card"
+                            key={product.id || product.name || index}
+                          >
+                            {product.image && (
+                              <img
+                                src={product.image}
+                                alt={product.name || product.title || 'Product'}
+                              />
+                            )}
+
+                            <div className="product-details">
+                              <h3>
+                                {product.name ||
+                                  product.title ||
+                                  'Recommended Product'}
+                              </h3>
+
+                              {product.description && (
+                                <p>{product.description}</p>
+                              )}
+
+                              <strong>
+                                ₹{getPrice(product)}
+                              </strong>
+
+                              {product.link && (
+                                <a
+                                  href={product.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  View Product
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {message.sender === 'bot' &&
+                    message.id !== messages[0]?.id && (
+                      <div className="message-feedback">
+                        <button
+                          type="button"
+                          aria-label="Helpful"
+                          className={
+                            message.feedback === 'up' ? 'active' : ''
+                          }
+                          onClick={() =>
+                            handleMessageFeedback(message.id, 'up')
+                          }
+                        >
+                          <ThumbsUp size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          aria-label="Not helpful"
+                          className={
+                            message.feedback === 'down' ? 'active' : ''
+                          }
+                          onClick={() =>
+                            handleMessageFeedback(message.id, 'down')
+                          }
+                        >
+                          <ThumbsDown size={15} />
+                        </button>
+                      </div>
+                    )}
+                </div>
+              </div>
             ))}
-
-            <div ref={bottomRef} />
           </div>
-        </section>
 
-        <footer className="chat-composer-area">
-          <form
-            className="chat-composer"
-            onSubmit={handleAsk}
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Please tell me about your query!"
-              aria-label="Chat message"
-            />
+          <div className="chat-footer">
+            <form className="chat-composer" onSubmit={handleSubmit}>
+              <input
+                type="text"
+                placeholder="Please tell me about your query!"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                aria-label="Enter your product query"
+              />
 
-            <button
-              type="submit"
-              className="ask-button"
-              aria-label="Ask"
-            >
-              <Send size={18} />
-              <span>Ask</span>
-            </button>
-          </form>
-
-          <div className="composer-actions">
-            <form
-              className="composer-save-form"
-              onSubmit={handleSave}
-            >
-              <button type="submit">
-                <Save size={16} />
-                Save Conversation
+              <button
+                type="submit"
+                className="ask-button"
+                aria-label="Ask"
+              >
+                <Send size={18} />
+                <span>Ask</span>
               </button>
             </form>
 
-            <button
-              type="button"
-              onClick={() => setShowFeedback(true)}
-            >
-              <Star size={16} />
-              Rate this conversation
-            </button>
+            <div className="composer-actions">
+              <button
+                type="button"
+                className="save-button"
+                onClick={handleSave}
+              >
+                <Save size={16} />
+                {saved ? 'Saved' : 'Save Conversation'}
+              </button>
 
-            <button
-              type="button"
-              onClick={handleNewSuggestion}
-            >
-              <Plus size={16} />
-              Want new suggestion?
-            </button>
+              <Link
+                to="/"
+                className="new-suggestion-link"
+                onClick={handleNewSuggestion}
+              >
+                <Plus size={16} />
+                Want new suggestion?
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {showFeedback && (
+          <div className="feedback-modal">
+            <div className="feedback-content">
+              <h2>Rate Your Experience</h2>
+              <p>How helpful were the recommendations?</p>
+
+              <div className="rating-stars">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    type="button"
+                    key={star}
+                    onClick={() => setRating(star)}
+                    aria-label={`Rate ${star} stars`}
+                  >
+                    <Star
+                      size={25}
+                      fill={star <= rating ? 'currentColor' : 'none'}
+                    />
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                placeholder="Share your feedback (optional)"
+                value={feedbackComment}
+                onChange={(event) =>
+                  setFeedbackComment(event.target.value)
+                }
+              />
+
+              <button
+                type="button"
+                onClick={handleFinalFeedback}
+                disabled={!rating}
+              >
+                Submit Feedback
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function HistoryPage() {
+  const [conversations, setConversations] = useState(
+    () => getStoredData(CHAT_KEY, [])
+  );
+
+  const [filter, setFilter] = useState('all');
+
+  const handleDelete = (id) => {
+    const updated = conversations.filter(
+      (conversation) => conversation.id !== id
+    );
+
+    setConversations(updated);
+    localStorage.setItem(CHAT_KEY, JSON.stringify(updated));
+  };
+
+  const filteredConversations = conversations.filter(
+    (conversation) => {
+      if (filter === 'all') return true;
+      return String(conversation.rating) === filter;
+    }
+  );
+
+  return (
+    <div className="app-container history-page">
+      <header className="chat-header">
+        <div className="header-left">
+          <div className="header-logo">
+            <History size={24} />
           </div>
 
-          {saved && (
-            <p className="save-confirmation">
-              Conversation saved successfully!
-            </p>
-          )}
+          <div className="chat-header-title">
+            <h1>Product Recommendation AI</h1>
+            <p>Your saved conversations</p>
+          </div>
+        </div>
 
-          <p className="composer-disclaimer">
-            AI recommendations are suggestions. Please verify product
-            details before purchasing.
-          </p>
-        </footer>
+        <Link to="/" className="history-link">
+          <ArrowLeft size={17} />
+          Back to Chat
+        </Link>
+      </header>
+
+      <main className="history-main">
+        <div className="history-toolbar">
+          <div>
+            <h2>Previous Suggestions</h2>
+            <p>Review your previous product recommendations.</p>
+          </div>
+
+          <div className="history-toolbar-actions">
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              aria-label="Filter by rating"
+            >
+              <option value="all">All Ratings</option>
+              <option value="5">5 Stars</option>
+              <option value="4">4 Stars</option>
+              <option value="3">3 Stars</option>
+              <option value="2">2 Stars</option>
+              <option value="1">1 Star</option>
+            </select>
+
+            <Link to="/" className="primary-action">
+              <Plus size={16} />
+              New suggestion
+            </Link>
+          </div>
+        </div>
+
+        {filteredConversations.length === 0 ? (
+          <div className="empty-history">
+            <div className="empty-history-icon">
+              <MessageCircle size={35} />
+            </div>
+
+            <h3>No previous suggestions found</h3>
+            <p>Your saved conversations will appear here.</p>
+
+            <Link to="/" className="primary-action">
+              Start a Conversation
+            </Link>
+          </div>
+        ) : (
+          <div className="history-list">
+            {filteredConversations
+              .slice()
+              .reverse()
+              .map((conversation) => (
+                <article
+                  className="history-card"
+                  key={conversation.id}
+                >
+                  <div className="history-card-header">
+                    <span>
+                      {new Date(conversation.date).toLocaleString()}
+                    </span>
+
+                    <button
+                      type="button"
+                      aria-label="Delete conversation"
+                      onClick={() => handleDelete(conversation.id)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+
+                  <div className="history-card-messages">
+                    {(conversation.messages || []).map((message) => (
+                      <div
+                        key={message.id}
+                        className={`history-message ${message.sender}`}
+                      >
+                        <strong>
+                          {message.sender === 'user' ? 'You' : 'AI'}
+                        </strong>
+
+                        <p>{message.text}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {conversation.rating > 0 && (
+                    <div className="history-rating">
+                      <span>Your rating:</span>
+
+                      {Array.from(
+                        { length: conversation.rating },
+                        (_, index) => (
+                          <Star
+                            key={index}
+                            size={15}
+                            fill="currentColor"
+                          />
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  {conversation.feedback && (
+                    <p className="history-comment">
+                      {conversation.feedback}
+                    </p>
+                  )}
+                </article>
+              ))}
+          </div>
+        )}
       </main>
-
-      {showFeedback && (
-        <FeedbackModal
-          onClose={() => setShowFeedback(false)}
-          onSubmit={handleFinalFeedback}
-        />
-      )}
     </div>
   );
 }
 
 export default function App() {
-  const [conversations, setConversations] = useState(() =>
-    readStorage(CHAT_KEY, [])
-  );
-
-  const [feedbacks, setFeedbacks] = useState(() =>
-    readStorage(FEEDBACK_KEY, {})
-  );
-
-  const [theme, setTheme] = useState(
-    () => localStorage.getItem(THEME_KEY) || 'light'
-  );
-
-  useEffect(() => {
-    localStorage.setItem(
-      CHAT_KEY,
-      JSON.stringify(conversations)
-    );
-  }, [conversations]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      FEEDBACK_KEY,
-      JSON.stringify(feedbacks)
-    );
-  }, [feedbacks]);
-
-  useEffect(() => {
-    localStorage.setItem(THEME_KEY, theme);
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  function deleteConversation(id) {
-    setConversations((previous) =>
-      previous.filter(
-        (conversation) => conversation.id !== id
-      )
-    );
-  }
-
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <ChatPage
-            conversations={conversations}
-            setConversations={setConversations}
-            feedbacks={feedbacks}
-            setFeedbacks={setFeedbacks}
-            theme={theme}
-            setTheme={setTheme}
-          />
-        }
-      />
-
-      <Route
-        path="/history"
-        element={
-          <HistoryPage
-            conversations={conversations}
-            onDelete={deleteConversation}
-          />
-        }
-      />
+      <Route path="/" element={<ChatPage />} />
+      <Route path="/history" element={<HistoryPage />} />
     </Routes>
   );
 }
