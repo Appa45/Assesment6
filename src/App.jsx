@@ -78,6 +78,7 @@ function createMessage(role, content, extra = {}) {
 // Product helpers
 // --------------------------------------------------
 
+
 function getProduct(query) {
   const products = responseData.products || [];
   const normalized = query.toLowerCase().trim();
@@ -88,6 +89,7 @@ function getProduct(query) {
     )
   );
 }
+
 
 function parseBudget(text) {
   const numbers = text.match(/[\d,]+(?:\.\d+)?/g);
@@ -730,9 +732,12 @@ function ChatPage({
 
     if (!query) return;
 
-    appendMessage(
-      createMessage('user', query)
-    );
+  appendMessage(
+  createMessage(
+    'assistant',
+    BUDGET_PROMPT
+  )
+);
 
     setInput('');
     setSaved(false);

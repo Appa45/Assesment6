@@ -157,7 +157,31 @@
           "description": "A compact mirrorless camera for photography and video."
         }
       ]
+    },
+{
+  "id": "jeans",
+  "name": "Jeans",
+  "keywords": ["jeans", "jean", "denim", "denim jeans"],
+  "prompt": "Great choice! What is your budget range for jeans?",
+  "recommendations": [
+    {
+      "name": "Roadster Men Slim Fit Jeans",
+      "price": 799,
+      "description": "Comfortable casual jeans for everyday wear."
+    },
+    {
+      "name": "Levis 511 Slim Fit Jeans",
+      "price": 1299,
+      "description": "Stylish slim-fit denim jeans."
+    },
+    {
+      "name": "Wrangler Regular Fit Jeans",
+      "price": 1799,
+      "description": "Classic regular-fit jeans with comfortable denim."
     }
+  ]
+}
+
   ],
   "fallback": "Sorry, I did not understand your query!"
 }
