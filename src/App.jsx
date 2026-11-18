@@ -504,6 +504,7 @@ function SearchPage() {
   );
 }
 
+
 function BookingPage({ onConfirm }) {
   const { restaurantId } = useParams();
   const location = useLocation();
@@ -512,6 +513,7 @@ function BookingPage({ onConfirm }) {
   const [restaurant, setRestaurant] = useState(
     location.state?.restaurant || null
   );
+
   const [selectedDate, setSelectedDate] = useState('Today');
   const [selectedTime, setSelectedTime] = useState('');
   const [guestName, setGuestName] = useState('');
@@ -527,7 +529,9 @@ function BookingPage({ onConfirm }) {
         sessionStorage.getItem('selectedRestaurant') || 'null'
       );
 
-      if (savedRestaurant) setRestaurant(savedRestaurant);
+      if (savedRestaurant) {
+        setRestaurant(savedRestaurant);
+      }
     } catch {
       setRestaurant(null);
     }
@@ -619,17 +623,21 @@ function BookingPage({ onConfirm }) {
 
           <div className="booking-divider" />
 
+          {/* DATE OPTIONS */}
           <section className="date-selection">
             <h2>Select a date</h2>
+
             <div className="date-options">
               {dateOptions.map((date) => (
                 <button
                   type="button"
                   key={date}
-                  className={`date-option ${selectedDate === date ? 'selected' : ''}`}
+                  className={`date-option ${
+                    selectedDate === date ? 'selected' : ''
+                  }`}
                   onClick={() => setSelectedDate(date)}
                 >
-                  <span>{date}</span>
+                  <p>{date}</p>
                 </button>
               ))}
             </div>
@@ -637,18 +645,22 @@ function BookingPage({ onConfirm }) {
 
           <div className="booking-divider" />
 
+          {/* TIME SLOTS */}
           <section className="time-selection">
             <h2>Choose a time</h2>
 
             {Object.entries(TIME_SLOTS).map(([period, slots]) => (
               <div className="time-period" key={period}>
                 <p>{period}</p>
+
                 <div className="time-slots">
                   {slots.map((slot) => (
                     <button
                       type="button"
                       key={slot}
-                      className={`time-slot ${selectedTime === slot ? 'selected' : ''}`}
+                      className={`time-slot ${
+                        selectedTime === slot ? 'selected' : ''
+                      }`}
                       onClick={() => {
                         setSelectedTime(slot);
                         setBookingError('');
@@ -665,6 +677,7 @@ function BookingPage({ onConfirm }) {
 
         <aside className="booking-details-card">
           <h2>Your details</h2>
+
           <form onSubmit={confirmBooking}>
             <label htmlFor="guestName">Full name</label>
             <input
@@ -703,12 +716,16 @@ function BookingPage({ onConfirm }) {
               Confirm Reservation
             </button>
           </form>
-          <p className="booking-note">No payment required to reserve your table.</p>
+
+          <p className="booking-note">
+            No payment required to reserve your table.
+          </p>
         </aside>
       </div>
     </main>
   );
 }
+
 
 function MyBookings({ bookings }) {
   return (
