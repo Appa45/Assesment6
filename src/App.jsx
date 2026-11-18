@@ -11,7 +11,7 @@ import {
   useParams,
 } from 'react-router-dom';
 
-import './styles.css';
+import './style.css';
 
 const API = 'https://restaurantdata.onrender.com';
 const BOOKING_KEY = 'bookings';
